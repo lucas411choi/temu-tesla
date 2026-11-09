@@ -1,0 +1,18 @@
+# 의존성 (npm install 로 다시 생기므로 GitHub 에 올리지 않습니다)
+node_modules/
+
+# 로그 / 임시 파일
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# 환경 변수(비밀번호 등)
+.env
+.env.*
+
+# 운영체제 / 편집기 잡파일
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,15 @@
+# Render "Blueprint" 설정 파일 (선택 사항)
+# - README 의 4단계처럼 화면에서 직접 Web Service 를 만들어도 되고,
+#   Render 대시보드에서 [New +] → [Blueprint] 로 이 저장소를 연결하면 아래 값이 자동으로 적용됩니다.
+services:
+  - type: web
+    name: temu-tesla
+    runtime: node
+    plan: free
+    region: singapore          # 한국에서 가장 가까운 Render 지역
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health   # 서버가 살아 있는지 확인하는 주소 (server/index.js 에 구현됨)
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

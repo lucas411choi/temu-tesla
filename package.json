@@ -1,0 +1,23 @@
+{
+  "name": "temu-tesla",
+  "version": "1.0.0",
+  "description": "Temu Tesla - 1~4인 온라인 협동 3D 장애물 돌파 게임",
+  "private": true,
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18.19.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "validate": "node tools/validate-map.js",
+    "bot-test": "node tools/bot-test.js",
+    "test": "node tools/check-imports.mjs && node tools/test-camera.mjs && node --import ./tools/fake-three/register.mjs tools/smoke-client.mjs && node tools/bot-test.js --inproc && node tools/validate-map.js --no-write"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "three": "0.170.0"
+  }
+}
