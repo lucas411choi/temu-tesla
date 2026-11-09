@@ -1,1 +1,1 @@
-
+export class EffectComposer { constructor(r, rt) { this.renderer = r; this.passes = []; this.renderTarget1 = rt; } addPass(p) { this.passes.push(p); } render() { this.renderer.render(); } setSize() {} dispose() {} }
