@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temu Tesla — 협동 로드스터</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0e1a'/%3E%3Cpath d='M12 22h40v9H36.5v21h-9V31H12z' fill='%2335f0ff'/%3E%3C/svg%3E">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
+<script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- ───────── HUD ───────── -->
+<div id="hud" class="hidden">
+  <div id="hud-top" class="panel">
+    <div id="sec-name">구간 1 · 튜토리얼 거리</div>
+    <div id="progress"><div id="prog-fill"></div><div id="prog-ticks"></div><div id="prog-car"></div></div>
+    <div id="prog-meta">0 m / 9000 m</div>
+  </div>
+  <div id="hud-stats" class="panel">
+    <div class="stat"><span>시간</span><b id="st-time">00:00.0</b></div>
+    <div class="stat"><span>사망</span><b id="st-deaths">0</b></div>
+    <div class="stat dbg"><span>FPS</span><b id="st-fps">-</b></div>
+    <div class="stat dbg"><span>지연</span><b id="st-ping">-</b></div>
+  </div>
+  <div id="hud-players" class="panel"></div>
+  <div id="hud-fuel" class="panel">
+    <div class="lbl">연료 <span id="fuel-note"></span></div>
+    <div id="fuel-pct">100<small>%</small></div>
+    <div id="fuel-bar"><div id="fuel-fill"></div><div id="fuel-mark"></div></div>
+  </div>
+  <div id="hud-ex" class="panel">
+    <div class="lbl">배출구 / 바퀴</div>
+    <div id="carmap">
+      <div class="ex" data-i="0"><b>E</b></div><div class="ex" data-i="1"><b>R</b></div>
+      <div class="body"></div>
+      <div class="ex" data-i="2"><b>D</b></div><div class="ex" data-i="3"><b>F</b></div>
+      <div class="wh" data-i="0"></div><div class="wh" data-i="1"></div><div class="wh" data-i="2"></div><div class="wh" data-i="3"></div>
+    </div>
+  </div>
+  <div id="hud-keys" class="panel">
+    <div class="lbl">내 담당 키 <span id="keys-who"></span></div>
+    <div class="keyrow"><div class="grp"><i>바퀴</i><div class="cap" data-k="q">Q</div><div class="cap" data-k="w">W</div><div class="cap" data-k="a">A</div><div class="cap" data-k="s">S</div></div>
+    <div class="grp"><i>배출구</i><div class="cap" data-k="e">E</div><div class="cap" data-k="r">R</div><div class="cap" data-k="d">D</div><div class="cap" data-k="f">F</div></div></div>
+  </div>
+  <div id="hud-alt" class="panel">
+    <div id="alt-bar"><div id="alt-fill"></div><div id="alt-mark"></div></div>
+    <b id="alt-val">0.0 m</b><span id="speed-val">0 km/h</span>
+  </div>
+  <div id="hint" class="hidden"></div>
+  <div id="toast" class="hidden"></div>
+  <div id="center-msg" class="hidden"></div>
+  <div id="suicide" class="hidden"><div id="suicide-fill"></div><span>자폭 부활 중…</span></div>
+  <div id="help-line">Shift+R 또는 Backspace 길게 = 자폭 후 체크포인트 부활 · C 시점 전환 · F11 전체화면 · Esc 설정</div>
+</div>
+
+<!-- ───────── 메뉴 ───────── -->
+<div id="screen-menu" class="screen hidden">
+  <div class="bg-grid"></div>
+  <div class="menu-card panel">
+    <h1><span>TEMU</span> TESLA</h1>
+    <p class="sub">1~4인 온라인 협동 · 로드스터 한 대를 키 8개로 나눠 조종해 도시를 돌파하세요</p>
+    <label class="field">이름<input id="in-name" maxlength="12" placeholder="플레이어" autocomplete="off"></label>
+    <div class="btnrow"><button id="btn-create" class="btn primary">방 만들기</button></div>
+    <div class="or">또는 방 코드로 입장</div>
+    <div class="btnrow join"><input id="in-code" maxlength="4" placeholder="ABCD" autocomplete="off"><button id="btn-join" class="btn">입장</button></div>
+    <div id="menu-msg" class="msg"></div>
+    <div class="btnrow small"><button id="btn-settings" class="btn ghost">설정</button><button id="btn-how" class="btn ghost">조작법</button></div>
+    <div id="how" class="how hidden">
+      <p><b>바퀴</b> Q(좌앞) W(우앞) A(좌뒤) S(우뒤) — 눌린 바퀴만 굴러서 차가 방향을 바꿉니다. 지면에서만 동작, 연료 소모 없음.</p>
+      <p><b>배출구</b> E(좌앞) R(우앞) D(좌뒤) F(우뒤) — 눌린 모서리에서 위로 분사. 기울여서 이동하세요. 연료는 켜진 개수만큼 빨리 닳고, 안 누르면 충전됩니다.</p>
+      <p>1명=8키 전부 · 2명=왼쪽/오른쪽 · 4명=모서리 하나씩. <b>3명은 불가</b>. 지면(도로) 외에 닿으면 폭발!</p>
+    </div>
+  </div>
+</div>
+
+<!-- ───────── 로비 ───────── -->
+<div id="screen-lobby" class="screen hidden">
+  <div class="bg-grid"></div>
+  <div class="lobby-card panel">
+    <div class="lobby-head"><div><div class="lbl">방 코드</div><div id="lobby-code">----</div></div><button id="btn-copy" class="btn ghost">코드 복사</button></div>
+    <div id="lobby-players"></div>
+    <div id="lobby-layout" class="layout"></div>
+    <div id="lobby-warn" class="msg warn"></div>
+    <div class="btnrow"><button id="btn-ready" class="btn">준비 완료</button><button id="btn-start" class="btn primary" disabled>게임 시작</button><button id="btn-leave" class="btn ghost">나가기</button></div>
+    <div class="note">친구에게 방 코드를 알려 주세요. 인원은 1, 2, 4명만 시작할 수 있어요. 방장만 시작할 수 있습니다.</div>
+  </div>
+</div>
+
+<!-- ───────── 오버레이들 ───────── -->
+<div id="overlay-wake" class="overlay"><div class="wake panel"><div class="spinner"></div><h2>서버를 깨우는 중…</h2><p id="wake-msg">무료 서버는 잠들어 있다가 처음 접속하면 30~60초쯤 걸릴 수 있어요.</p></div></div>
+<div id="overlay-mobile" class="overlay hidden"><div class="wake panel"><h2>키보드가 필요한 게임입니다</h2><p>이 게임은 Q W A S E R D F 키로 조종합니다.<br>키보드가 있는 PC 브라우저에서 접속해 주세요.</p></div></div>
+<div id="overlay-pause" class="overlay hidden"><div class="wake panel"><h2>일시정지</h2><p id="pause-msg"></p><div id="pause-count">30</div></div></div>
+<div id="overlay-result" class="overlay hidden"><div class="wake panel result"><h2>도착!</h2><div class="res-grid"><div><span>총 시간</span><b id="res-time">00:00.0</b></div><div><span>사망 횟수</span><b id="res-deaths">0</b></div></div><p id="res-names"></p><div class="btnrow"><button id="btn-again" class="btn primary">다시 하기</button><button id="btn-quit" class="btn ghost">나가기</button></div></div></div>
+<div id="modal-settings" class="overlay hidden"><div class="wake panel settings">
+  <h2>설정</h2>
+  <label class="row">카메라 시점 (게임 중 C 키)<select id="set-cam"><option value="chase" selected>추격 (그란 투리스모식)</option><option value="top">탑뷰</option></select></label>
+  <label class="row">그래픽 품질<select id="set-quality"><option value="low">낮음</option><option value="medium">중간</option><option value="high" selected>높음</option><option value="ultra">울트라</option></select></label>
+  <label class="row">프레임이 떨어지면 자동으로 낮추기<input type="checkbox" id="set-auto"></label>
+  <label class="row">음량<input type="range" id="set-vol" min="0" max="100" value="80"></label>
+  <label class="row">음소거<input type="checkbox" id="set-mute"></label>
+  <div class="btnrow"><button id="btn-full" class="btn">전체화면</button><button id="btn-set-close" class="btn primary">닫기</button></div>
+</div></div>
+<div id="debugpanel" class="hidden panel"></div>
+<div id="errbox" class="hidden"></div>
+<script type="module" src="/main.js"></script>
+</body>
+</html>
