@@ -39,8 +39,10 @@ export function stepChase(st, dt, car, lim = {}) {
   const alt = Math.max(0, car.alt || 0), spd = Math.hypot(v[0], v[2]);
   const h = carHeading(car.q || [0, 0, 0, 1]);
   let yawT = h === null ? st.yawT : h;                                                     // 기수가 수직이면 이전 방향 유지
-  if (spd > 3) yawT += wrapAngle(Math.atan2(-v[0], -v[2]) - yawT) * 0.3 * Math.min(1, (spd - 3) / 5);   // 옆으로 미끄러지면 진행 방향도 반영
-  yawT += wrapAngle((lim.roadYaw || 0) - yawT) * 0.15;                                      // 도로(경로) 방향으로 살짝 끌어당김
+  // 앞으로 미끄러질 때만 진행 방향을 조금 반영한다 (후진 중에는 반영하지 않아 항상 차 뒷면을 비춘다)
+  if (spd > 3) { const dv = wrapAngle(Math.atan2(-v[0], -v[2]) - yawT); if (Math.abs(dv) < 1.2) yawT += dv * 0.3 * Math.min(1, (spd - 3) / 5); }
+  // 경로 방향으로 아주 살짝 끌어당김 (차가 경로와 크게 어긋나 있으면 끌지 않음)
+  { const dr = wrapAngle((lim.roadYaw || 0) - yawT); if (Math.abs(dr) < 0.8) yawT += dr * 0.08; }
   st.yawT = yawT;
   const first = !st.init;
   st.yaw = first ? yawT : st.yaw + wrapAngle(yawT - st.yaw) * (1 - Math.exp(-dt * 3));
@@ -50,8 +52,8 @@ export function stepChase(st, dt, car, lim = {}) {
   const k = first ? 1 : 1 - Math.exp(-dt * 12), ky = first ? 1 : 1 - Math.exp(-dt * 7);
   st.px += (p[0] - sx * dist - st.px) * k; st.pz += (p[2] - sz * dist - st.pz) * k; st.py += (p[1] + height - st.py) * ky;
   st.init = true;
-  const wall = lim.wall === undefined || !Number.isFinite(lim.wall) ? 60 : lim.wall;
-  const x = Math.max(-(wall - 0.8), Math.min(wall - 0.8, st.px));
+  // 옆 벽 제한은 벽이 있을 때만. (예전엔 벽이 없으면 x=±59m 로 묶여서, 구불구불한 경로에서 카메라가 멈춰 멀리서 바라봤다)
+  const x = lim.wall === undefined || !Number.isFinite(lim.wall) ? st.px : Math.max(-(lim.wall - 0.8), Math.min(lim.wall - 0.8, st.px));
   let y = st.py;
   if (lim.ceil) y = Math.min(y, lim.ceil - 0.6);
   y = Math.max(y, (lim.ground || 0) + 0.9);

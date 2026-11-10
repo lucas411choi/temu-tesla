@@ -4,7 +4,7 @@
 import { newBuilders, EMIT, decorS } from './props.js';
 import { LONG_TYPES } from './scenery.js';
 import { hex, mulc } from './mesh.js';
-import { Track } from '../../shared/track.js';
+import { Track, arcAt } from '../../shared/track.js';
 
 export const CHUNK = 300;
 const WHITE = [1, 1, 1];
@@ -30,9 +30,14 @@ export class CityView {
         for (const p of this.track.pieces) {
           const a = Math.max(d.s0, p.s0), b = Math.min(d.s1, p.s1);
           if (b - a < 0.05) continue;
-          for (let ci = Math.floor(Math.max(0, a) / CHUNK); ci <= Math.floor(Math.max(0, b - 1e-6) / CHUNK); ci++) {
-            const c0 = Math.max(a, ci * CHUNK), c1 = Math.min(b, (ci + 1) * CHUNK);
-            if (c1 - c0 > 0.05) put(ci, { ...d, c0, c1 });
+          // 곡선 조각에서는 4m 이하로 잘라서 각 조각을 그 자리 접선 방향으로 그린다
+          const n = p.kind === 'arc' ? Math.max(1, Math.ceil((b - a) / 4)) : 1, st = (b - a) / n;
+          for (let j = 0; j < n; j++) {
+            const a2 = a + j * st, b2 = a2 + st;
+            for (let ci = Math.floor(Math.max(0, a2) / CHUNK); ci <= Math.floor(Math.max(0, b2 - 1e-6) / CHUNK); ci++) {
+              const c0 = Math.max(a2, ci * CHUNK), c1 = Math.min(b2, (ci + 1) * CHUNK);
+              if (c1 - c0 > 0.05) put(ci, { ...d, c0, c1 });
+            }
           }
         }
       } else put(Math.max(0, Math.floor(decorS(d) / CHUNK)), d);
@@ -140,8 +145,21 @@ export class CityView {
     let bx = null;
     const grow = (x, z) => { if (!bx) bx = [x, x, z, z]; else { bx[0] = Math.min(bx[0], x); bx[1] = Math.max(bx[1], x); bx[2] = Math.min(bx[2], z); bx[3] = Math.max(bx[3], z); } };
     const floor = this.map.floorY;
+    // 곡선 판은 짧은 직선 판(약 2.5m)들로 쪼개서 그린다
+    const list = [];
     for (const sl of this.track.slabs) {
-      const sa = sl.s0 + (sl.corner || sl.piece < 0 ? 0 : sl.a0), sb = sl.s0 + (sl.corner || sl.piece < 0 ? 0.01 : sl.a1);
+      if (!sl.arc) { list.push(sl); continue; }
+      if (sl.s0 + sl.L < s0 || sl.s0 >= s1) continue;
+      const n = Math.max(2, Math.ceil(sl.L / 2.5)), seg = sl.L / n, every = Math.max(1, Math.round(20 / seg));
+      for (let j = 0; j < n; j++) {
+        const q = arcAt(sl, (j + 0.5) * seg), ya = sl.y0 + (sl.y1 - sl.y0) * (j / n), yb = sl.y0 + (sl.y1 - sl.y0) * ((j + 1) / n);
+        // 바깥쪽 가장자리 틈이 생기지 않게 바깥 반지름 기준으로 살짝 길게
+        const ext = seg * (1 + sl.w / sl.R) / 2 + 0.03;
+        list.push({ x0: q.x, z0: q.z, fx: Math.sin(q.h), fz: -Math.cos(q.h), rx: Math.cos(q.h), rz: Math.sin(q.h), a0: -ext, a1: ext, w: sl.w, y0: ya, y1: yb, surf: sl.surf, piece: sl.piece, s0: sl.s0 + j * seg, arcSeg: true, pillar: j % every === Math.floor(every / 2) });
+      }
+    }
+    for (const sl of list) {
+      const sa = sl.s0 + (sl.corner || sl.piece < 0 || sl.arcSeg ? 0 : sl.a0), sb = sl.s0 + (sl.corner || sl.piece < 0 || sl.arcSeg ? 0.01 : sl.a1);
       if (sb < s0 || sa >= s1) continue;
       const st = SURF[sl.surf] || SURF.road;
       const P = (a, l, dy = 0) => [sl.x0 + a * sl.fx + l * sl.rx, sl.y0 + (sl.y1 - sl.y0) * ((a - sl.a0) / ((sl.a1 - sl.a0) || 1)) + dy, sl.z0 + a * sl.fz + l * sl.rz];
@@ -149,7 +167,7 @@ export class CityView {
       for (const [a, l] of [[a0, -w], [a0, w], [a1, -w], [a1, w]]) { const p = P(a, l); grow(p[0], p[2]); }
       // 윗면
       const quad = (mb, col, uvf) => mb.quadOut(P(a0, -w), P(a0, w), P(a1, w), P(a1, -w), up, col, uvf);
-      if (st.mat === 'road' && w >= 6 && !sl.corner) quad(B.road, WHITE, (p) => { const l = (p[0] - sl.x0) * sl.rx + (p[2] - sl.z0) * sl.rz, a = (p[0] - sl.x0) * sl.fx + (p[2] - sl.z0) * sl.fz; return [(l / w) * 0.5 * (w / 12) + 0.5, a / 12]; });
+      if (st.mat === 'road' && w >= 6 && !sl.corner && !sl.arcSeg) quad(B.road, WHITE, (p) => { const l = (p[0] - sl.x0) * sl.rx + (p[2] - sl.z0) * sl.rz, a = (p[0] - sl.x0) * sl.fx + (p[2] - sl.z0) * sl.fz; return [(l / w) * 0.5 * (w / 12) + 0.5, a / 12]; });
       else if (st.mat === 'road') quad(B.prop, hex(0x2c2f36));
       else if (st.mat === 'side') quad(B.side, st.tint || WHITE, (p) => [(p[0] + p[2] * 0.0001) / 4, p[2] / 4]);
       else if (st.metal) quad(B.metal, st.metal);
@@ -158,7 +176,7 @@ export class CityView {
       // 옆면/아랫면 (두께 0.8)
       const th = st.metal || st.glass ? 0.35 : 0.8;
       for (const sd of [-1, 1]) B.prop.quadOut(P(a0, sd * w), P(a1, sd * w), P(a1, sd * w, -th), P(a0, sd * w, -th), [sd * sl.rx, 0, sd * sl.rz], st.metal ? mulc(st.metal, 0.7) : hex(0x5a5d64));
-      for (const a of [a0, a1]) B.prop.quadOut(P(a, -w), P(a, w), P(a, w, -th), P(a, -w, -th), [a === a0 ? -sl.fx : sl.fx, 0, a === a0 ? -sl.fz : sl.fz], hex(0x4a4d54));
+      if (!sl.arcSeg) for (const a of [a0, a1]) B.prop.quadOut(P(a, -w), P(a, w), P(a, w, -th), P(a, -w, -th), [a === a0 ? -sl.fx : sl.fx, 0, a === a0 ? -sl.fz : sl.fz], hex(0x4a4d54));
       B.prop.quadOut(P(a0, -w, -th), P(a0, w, -th), P(a1, w, -th), P(a1, -w, -th), [0, -1, 0], hex(0x33363c));
       // 가장자리 표시 / 노면 무늬
       for (const sd of [-1, 1]) B.glow.quadOut(P(a0, sd * (w - 0.08), 0.02), P(a1, sd * (w - 0.08), 0.02), P(a1, sd * (w - 0.3), 0.02), P(a0, sd * (w - 0.3), 0.02), up, st.metal ? [1.4, 1.0, 0.3] : [0.9, 0.9, 0.95]);
@@ -168,9 +186,9 @@ export class CityView {
       if (st.pipe) for (let a = a0; a < a1 - 0.5; a += 2) { const k = [0, 0.6, 0.85, 0.6, 0]; for (let i = 0; i < 4; i++) { const l0 = -w + i * w / 2, l1 = l0 + w / 2; B.metal.quadOut(P(a, l0, -k[i] * 1.6 - th), P(a + 2, l0, -k[i] * 1.6 - th), P(a + 2, l1, -k[i + 1] * 1.6 - th), P(a, l1, -k[i + 1] * 1.6 - th), [0, -1, 0], mulc(st.metal, 0.8)); } }
       // 떠 있는 판: 바닥까지 기둥
       const cy = Math.min(sl.y0, sl.y1);
-      if (cy - floor > 3 && !sl.corner) {
+      if (cy - floor > 3 && !sl.corner && (!sl.arcSeg || sl.pillar)) {
         const step = st.metal ? 14 : 22;
-        for (let a = a0 + Math.min(6, len / 2); a < a1; a += step) {
+        for (let a = sl.arcSeg ? 0 : a0 + Math.min(6, len / 2); a < a1; a += step) {
           const p = P(a, 0, -th), hgt = p[1] - floor;
           if (w >= 5) for (const sd of [-0.6, 0.6]) { const q = P(a, sd * w, -th); B.prop.box(q[0], floor + (q[1] - floor) / 2, q[2], 0.6, (q[1] - floor) / 2, 0.6, hex(0x6a6d74), { bevel: 0.08 }); }
           else B.metal.box(p[0], floor + hgt / 2, p[2], 0.35, hgt / 2, 0.35, st.metal ? mulc(st.metal, 0.75) : hex(0x6a6d74));

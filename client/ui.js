@@ -193,7 +193,7 @@ export class UI {
     set('alt', Math.round(v.alt * 5), () => { $('alt-val').textContent = `${v.alt.toFixed(1)} m`; const k = Math.min(1, v.alt / 45); $('alt-fill').style.height = `${k * 100}%`; $('alt-mark').style.bottom = `${k * 100}%`; });
     set('kmh', Math.round(v.kmh), (k) => { $('speed-val').textContent = `${k} km/h`; });
     const pct = Math.min(1, Math.max(0, v.sCar / map.length));
-    set('prog', Math.round(pct * 2000), () => { $('prog-fill').style.width = `${pct * 100}%`; $('prog-car').style.left = `${pct * 100}%`; $('prog-meta').textContent = `${Math.max(0, Math.round(v.sCar))} m / ${map.length} m`; });
+    set('prog', Math.round(pct * 2000), () => { $('prog-fill').style.width = `${pct * 100}%`; $('prog-car').style.left = `${pct * 100}%`; $('prog-meta').textContent = `${Math.max(0, Math.round(v.sCar))} m / ${Math.round(map.length)} m`; });
     let si = 0; for (const s of map.sections) if (v.sCar >= s.s0) si = s.idx;
     set('sec', si + ':' + st.cp, () => { const s = map.sections[Math.max(0, si - 1)]; $('sec-name').textContent = `구간 ${s.idx}/${map.sections.length} · ${s.name}   ·   체크포인트 ${st.cp + 1}/${map.checkpoints.length}`; this.ticks.forEach((t, i) => t.classList.toggle('done', i <= st.cp)); });
     // 키 UI: 내가 누른 키는 즉시 켜짐

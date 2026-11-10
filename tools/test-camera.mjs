@@ -114,6 +114,11 @@ for (const [name, s] of [['이륙', s3], ['회전', s4], ['고공', s5]]) {
   const st2 = newChaseState(); const car2 = { p: [12.5, 0.55, -5500], v: [0, 0, -9], q: [0, 0, 0, 1], alt: 0 };
   for (let i = 0; i < 60; i++) r = stepChase(st2, 1 / 60, car2, { wall: 13.0, ceil: 0, ground: 0 });
   (Math.abs(r.pos[0]) <= 12.2 + 1e-9) ? ok(`옆 벽 안쪽으로 제한 (카메라 x ${r.pos[0].toFixed(2)}m ≤ 12.2m)`) : fail('벽 밖으로 카메라가 나감');
+  // 구불구불한 경로: 원점에서 멀리(x=900) 가도 카메라가 벽 제한 없이 차를 따라간다 (예전 버그: x=±59m 에 멈춤)
+  const st4 = newChaseState(); let r4;
+  for (let i = 0; i < 120; i++) r4 = stepChase(st4, 1 / 60, { p: [900 + i * 0.2, 0.55, -300], v: [12, 0, 0], q: [0, Math.sin(-Math.PI / 4), 0, Math.cos(-Math.PI / 4)], alt: 0 }, { wall: Infinity, ground: 0, roadYaw: -Math.PI / 2 });
+  const d4 = Math.hypot(r4.pos[0] - 924, r4.pos[2] + 300);
+  (d4 < 10) ? ok('멀리 떨어진 경로에서도 카메라가 차 뒤 ' + d4.toFixed(1) + 'm 에 붙어 따라감') : fail('카메라가 차를 놓침 (카메라 x=' + r4.pos[0].toFixed(1) + ')');
   const st3 = newChaseState(); stepChase(st3, 1 / 60, { p: [0, 0.55, -100], v: [0, 0, -9], q: [0, 0, 0, 1], alt: 0 }, {});
   st3.init = false; const r3 = stepChase(st3, 1 / 60, { p: [0, 0.55, -4000], v: [0, 0, 0], q: [0, 0, 0, 1], alt: 0 }, {});
   (Math.abs(r3.pos[2] - (-4000 + CHASE.dist)) < 0.6) ? ok('부활/순간이동 시 카메라가 즉시 따라옴') : fail(`순간이동 후 카메라 z=${r3.pos[2].toFixed(1)}`);

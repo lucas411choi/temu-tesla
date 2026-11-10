@@ -3,7 +3,7 @@
 import { assembleMap } from './city.js';
 import { makeBox } from '../collision.js';
 import { rotZ } from '../math.js';
-import { cityScene, palms } from './scenery.js';
+import { cityScene, palms, parkGround } from './scenery.js';
 import fuelTable from './park.fuel.js';
 
 const mid = (r) => (r[0] + r[1]) / 2;
@@ -38,6 +38,7 @@ function wheelRide(B, s, o = {}) {
     solid(B, s + dz, x0 / 2, cy / 2, len / 2, 0.35, 0.35, 'wheel', rotZ(ang));
   }
   solid(B, s, 0, cy, 0.6, 0.6, 3.6, 'wheel');
+  for (const side of [-1, 1]) B.anchor(s, side * X, 1.4, 0, { tag: 'wheel', hz: 4.2 });
   B.add('wheelbase', { s, R, cy, X, hue: o.hue || 200 });
 }
 function vikingRide(B, s, o = {}) {
@@ -48,6 +49,7 @@ function vikingRide(B, s, o = {}) {
     solid(B, s + dz, x0 / 2, py / 2, len / 2, 0.3, 0.3, 'swing', rotZ(ang));
   }
   solid(B, s, 0, py, 0.4, 0.4, 3.6, 'swing');
+  for (const side of [-1, 1]) B.anchor(s, side * X, 1.2, 0, { tag: 'swing', hz: 4 });
   B.add('swingframe', { s, py, X });
 }
 function swinger(B, s) {
@@ -62,7 +64,7 @@ function swinger(B, s) {
 function coasterTrack(B, s, y, o = {}) {
   const W = B.wAt(s) + 4;
   B.box(s, 0, y - 0.25, W, 0.25, 0.8, 'track');
-  for (const side of [-1, 1]) B.box(s, side * (W - 1.2), (y - 0.5) / 2, 0.4, (y - 0.5) / 2, 0.4, 'track');
+  for (const side of [-1, 1]) { B.box(s, side * (W - 1.2), (y - 0.5) / 2, 0.4, (y - 0.5) / 2, 0.4, 'track'); B.anchor(s, side * (W - 1.2), 0.4, 0, { tag: 'track', style: 'steel' }); }
   B.coaster(s, { y, v: o.v || 24, P: o.P || 5.5, ph: o.ph || 0, dir: o.dir || 1, len: 2 * W + 20, cars: 5, hue: o.hue !== undefined ? o.hue : 330 });
   B.add('track', { s, y, w: W, hue: o.hue !== undefined ? o.hue : 330 });
 }
@@ -77,7 +79,7 @@ function coasterCrossing(B, s, o = {}) {
 function hauntSolid(B, s, dir) {
   const W = 11, off = dir > 0 ? 0.2 : -0.2;
   solid(B, s - off, 0, (7 + 24) / 2, W, (24 - 7) / 2, 0.6, 'building');
-  for (const sd of [-1, 1]) solid(B, s - off, sd * (W - 1.5), 3.5, 1.5, 3.5, 0.6, 'building');
+  for (const sd of [-1, 1]) { solid(B, s - off, sd * (W - 1.5), 3.5, 1.5, 3.5, 0.6, 'building'); B.anchor(s - off, sd * (W - 1.5), 1.5, 0, { tag: 'building', hz: 0.6 }); }
 }
 const balloons = (B, s, o = {}) => B.drone(s, { cx: 0, cy: o.cy || 1.6, ax: o.ax || Math.max(2, B.wAt(s) - 2), ay: 0.6, az: o.az || 4, per: o.per || 9, ph: o.ph || 0, r: 1.15, kind: 'balloon', hue: Math.floor(B.rng() * 360) });
 
@@ -87,7 +89,7 @@ function p1(B) {
   B.run(70, { w: 9, surf: 'plaza' });
   B.checkpoint(14, { noPad: true }); B.pad(0, 56);
   B.add('parkentry', { s: 30, w: 9 }); B.box(30, 0, 19, 10, 3, 1.2, 'gate');
-  for (const sd of [-1, 1]) B.box(30, sd * 10, 11, 1.0, 11, 1.2, 'gate');
+  for (const sd of [-1, 1]) { B.box(30, sd * 10, 11, 1.0, 11, 1.2, 'gate'); B.anchor(30, sd * 10, 1.0, 0, { tag: 'gate', hz: 1.2 }); }
   const r1 = B.run(70);
   B.hop(r1[0] + 20, 1.2, { label: '개찰구 1.2m', style: 'turnstile', v0: 8 });
   B.boxSlalom(r1[0] + 38, r1[1] - 8, { kinds: [[1.0, 0.9, 1.6, 'cart']], step: 14, gapW: 8 });
@@ -117,7 +119,7 @@ function p1(B) {
   B.hop(r6[0] + 56, 2.0, { label: '화단 2.0m', style: 'hedge' });
   B.plaza(44, 9);
   const sEndJob = B.s;
-  B.scenery((B, T) => cityScene(B, T, s0, sEndJob, 'toon'));
+  B.scenery((B, T) => { cityScene(B, T, s0, sEndJob, 'toon'); parkGround(B, T, s0, sEndJob, { far: 26 }); });
 }
 
 // ───────── 2. 먹거리 거리 (가판대 사이 꼬불꼬불) ─────────
@@ -152,7 +154,7 @@ function p2(B) {
   B.hop(r6[0] + 56, 1.8, { label: '테이블 담장 1.8m', style: 'stallwall' });
   B.plaza(44, 7);
   const sEndJob = B.s;
-  B.scenery((B, T) => cityScene(B, T, s0, sEndJob, 'stall', { gap: 0.4 }));
+  B.scenery((B, T) => { cityScene(B, T, s0, sEndJob, 'stall', { gap: 0.4 }); parkGround(B, T, s0, sEndJob, { far: 30 }); });
 }
 
 // ───────── 3. 회전목마 광장 ─────────
@@ -180,7 +182,7 @@ function p3(B) {
   B.jump(26, { label: '분수 연못 26m', style: 'pool' });
   B.run(40);
   const sEndJob = B.s;
-  B.scenery((B, T) => cityScene(B, T, s0, sEndJob, 'park'));
+  B.scenery((B, T) => { parkGround(B, T, s0, sEndJob); cityScene(B, T, s0, sEndJob, 'park', { gap: 30, jitter: 20 }); });
 }
 
 // ───────── 4. 롤러코스터 랜드: 코스터 레일 위를 직접 달린다 ─────────
@@ -216,7 +218,7 @@ function p4(B) {
   for (const [d, x] of [[32, -5], [32, 2], [42, -1], [42, 5]]) B.pillar(r5[0] + d, x, 1.4, 12, { style: 'track' });
   B.hop(r5[0] + 58, 2.4, { label: '코스터 펜스 2.4m', style: 'fence' });
   const sEndJob = B.s;
-  B.scenery((B, T) => cityScene(B, T, s0, sEndJob, 'park', { tex: 4, gap: 4, jitter: 8 }));
+  B.scenery((B, T) => { parkGround(B, T, s0, sEndJob); cityScene(B, T, s0, sEndJob, 'park', { tex: 4, gap: 30, jitter: 20 }); });
 }
 
 // ───────── 5. 대관람차 & 바이킹 & 자이로드롭 ─────────
@@ -233,7 +235,7 @@ function p5(B) {
   const r3 = B.run(70, { w: 10 });
   for (const [d, ph] of [[20, 0], [48, 3.5]]) {
     B.ceilPlate(r3[0] + d, { d: 6, yTop: 30, yHigh: 24, yLow: 0, h: 2.4, P: 7, hold: 3.2, drop: 0.9, stay: 0.8, rise: 2.1, ph, kind: 'drop' });
-    for (const side of [-1, 1]) B.box(r3[0] + d, side * 11.6, 16, 1.2, 16, 1.2, 'droptower');
+    for (const side of [-1, 1]) { B.box(r3[0] + d, side * 11.6, 16, 1.2, 16, 1.2, 'droptower'); B.anchor(r3[0] + d, side * 11.6, 1.2, 0, { tag: 'droptower', style: 'steel' }); }
     B.add('droptower', { s: r3[0] + d, top: 32, X: 11.6 });
   }
   B.turn(-90);
@@ -252,7 +254,7 @@ function p5(B) {
   B.hop(r6[0] + 54, 3.0, { label: '대관람차 펜스 3.0m', style: 'fence' });
   B.plaza(44, 10);
   const sEndJob = B.s;
-  B.scenery((B, T) => cityScene(B, T, s0, sEndJob, 'park', { gap: 6, jitter: 10 }));
+  B.scenery((B, T) => { parkGround(B, T, s0, sEndJob); cityScene(B, T, s0, sEndJob, 'park', { gap: 30, jitter: 20 }); });
 }
 
 // ───────── 6. 유령의 집 (실내 통로 + 꺾이는 곳마다 어두운 안뜰) ─────────
@@ -328,7 +330,7 @@ function p7(B) {
   B.hop(r6[0] + 44, 4.0, { spikes: 0.8, label: '최종 관문: 성문 4.0m', style: 'castle' });
   B.run(50, { w: 8 });
   const sEndJob = B.s;
-  B.scenery((B, T) => cityScene(B, T, s0, sEndJob, 'castle'));
+  B.scenery((B, T) => { cityScene(B, T, s0, sEndJob, 'castle', { gap: 1.0 }); parkGround(B, T, s0, sEndJob, { far: 20 }); });
 }
 
 const SECTIONS = [

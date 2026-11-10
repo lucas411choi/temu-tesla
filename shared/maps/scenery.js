@@ -2,6 +2,7 @@
 // 모든 구조물은 보이는 그대로 충돌 상자를 가진다. 바닥은 floorY (경로보다 한참 아래).
 import { makeBox } from '../collision.js';
 import { rectOverlap } from './lib.js';
+import { rotZ } from '../math.js';
 
 const solid = (B, s, x, y, hx, hy, hz, tag = 'building') => { const b = makeBox(x, y, -s, hx, hy, hz); b.tag = tag; b.sec = B.cur; B.statics.push(b); return b; };
 // 피스 p 위 로컬 사각형(s 중심, x 중심, 반길이 a(진행 방향), 반폭 w(옆 방향)) → 월드 사각형
@@ -13,6 +14,7 @@ export function free(B, track, R, m = 0.8) {
   const ext = Math.abs(R.a * R.fx) + Math.abs(R.w * R.rx) + 2, ezt = Math.abs(R.a * R.fz) + Math.abs(R.w * R.rz) + 2;
   for (const sl of track.slabs) {
     if (sl.box[1] + m < R.cx - ext || sl.box[0] - m > R.cx + ext || sl.box[3] + m < R.cz - ezt || sl.box[2] - m > R.cz + ezt) continue;
+    if (sl.arc) { for (const q of sl.subs) if (rectOverlap({ ...q, a: q.a + m, w: q.w + m }, R)) return false; continue; }
     if (rectOverlap(slabRect(sl, m), R)) return false;
   }
   for (const F of B.foot) {
@@ -27,7 +29,7 @@ const claim = (B, R) => { R.rad = Math.hypot(R.a, R.w); B.foot.push(R); };
 export function rowsAlong(B, track, s0, s1, o = {}) {
   const rng = B.rng, floor = B.floorY;
   for (const p of track.pieces) {
-    if (!p.solid || p.L < 6) continue;
+    if (!p.solid || p.L < 6 || p.kind === 'arc') continue;
     const a0 = Math.max(s0, p.s0 + (o.trim || 0)), a1 = Math.min(s1, p.s0 + p.L - (o.trim || 0));
     if (a1 - a0 < 6) continue;
     for (const side of o.sides || [-1, 1]) {
@@ -57,7 +59,7 @@ export function rowsAlong(B, track, s0, s1, o = {}) {
 export function scatter(B, track, s0, s1, o, make) {
   const rng = B.rng;
   for (const p of track.pieces) {
-    if (p.L < 8) continue;
+    if (p.L < 8 || p.kind === 'arc') continue;
     const a0 = Math.max(s0, p.s0), a1 = Math.min(s1, p.s0 + p.L);
     for (let s = a0 + rng.range(2, o.every || 30); s < a1; s += rng.range((o.every || 30) * 0.6, (o.every || 30) * 1.3)) {
       for (const side of [-1, 1]) {
@@ -93,7 +95,7 @@ export function cityScene(B, track, s0, s1, style, o = {}) {
 export function siteScene(B, track, s0, s1) {
   const rng = B.rng;
   for (const p of track.pieces) {
-    if (!p.solid || p.L < 10) continue;
+    if (!p.solid || p.L < 10 || p.kind === 'arc') continue;
     const a0 = Math.max(s0, p.s0), a1 = Math.min(s1, p.s0 + p.L);
     for (const side of [-1, 1]) for (let s = a0; s < a1 - 6;) {
       const w = Math.min(rng.range(16, 28), a1 - s), d = rng.range(14, 24), x0 = p.w + rng.range(2, 6), sc = s + w / 2;
@@ -147,4 +149,42 @@ export function cableY(u, H, lo, endA, endB) {
   if (endB) return H - (H - 1.2) * (1 - (1 - u) * (1 - u));
   const k = (2 * u - 1);
   return lo + (H - lo) * k * k;
+}
+
+// ───────── 놀이공원 바닥: 경로 아래/옆 땅 위의 테마파크 구조물 (보이는 그대로 충돌) ─────────
+// 서커스 텐트, 회전목마 파빌리온, 코스터 루프, 매점, 풍선 가게, 나무
+export function parkGround(B, track, s0, s1, o = {}) {
+  const rng = B.rng;
+  scatter(B, track, s0, s1, { every: o.every || 16, near: 2, far: o.far || 34, hw: 7, chance: 0.85, margin: 1.2 }, (s, x, side, p, hw) => {
+    const surf = surfAt(p, s), base = B.floorY - surf, pick = rng();
+    const seed = Math.floor(rng() * 1e6), hue = Math.floor(rng() * 360);
+    if (pick < 0.24) {                       // 서커스 텐트: 원기둥 + 원뿔 지붕
+      const r = rng.range(5, 6.8), h = rng.range(6, 9), roof = r * 0.9;
+      solid(B, s, x, base + h / 2, r * 0.72, h / 2, r * 0.72, 'tent');
+      solid(B, s, x, base + h + roof * 0.35, r * 0.42, roof * 0.35, r * 0.42, 'tent');
+      B.add('tent', { s, x, r, h, roof, base, hue, seed });
+    } else if (pick < 0.42) {                // 회전목마 파빌리온 (바닥에 있는 장식용, 천천히 도는 말은 보이기만)
+      const r = rng.range(5, 6.5);
+      solid(B, s, x, base + 3.4, r * 0.72, 3.4, r * 0.72, 'carousel');
+      B.add('pavilion', { s, x, r, base, hue });
+    } else if (pick < 0.55) {                // 코스터 루프(세로 고리): 고리 둘레 = 충돌 상자들
+      const R = rng.range(5, 6.5), cy = base + R + 1.5;
+      for (let k = 0; k < 12; k++) {
+        const a = k * Math.PI / 6, am = a + Math.PI / 12, hx = R * Math.sin(Math.PI / 12) + 0.2;
+        const b = makeBox(x + Math.cos(am) * R, cy + Math.sin(am) * R, -s, hx, 0.35, 0.5, 0, rotZ(am + Math.PI / 2)); b.tag = 'track'; b.sec = B.cur; B.statics.push(b);
+      }
+      for (const dx of [-R * 0.7, R * 0.7]) solid(B, s, x + dx, base + (R + 1.5) / 2, 0.3, (R + 1.5) / 2, 0.3, 'track');
+      B.add('loop', { s, x, R, cy, base, hue });
+    } else if (pick < 0.72) {                // 매점 / 기념품 가게
+      const hx = rng.range(2.4, 3.6), hz = rng.range(2, 3), h = rng.range(3.4, 4.4);
+      solid(B, s, x, base + h / 2, hx, h / 2, hz, 'booth');
+      B.add('kiosk', { s, x, hx, hz, h, base, hue, seed, food: rng.pick(['츄러스', '솜사탕', '팝콘', '핫도그', '아이스크림', '기념품', '풍선']) });
+    } else if (pick < 0.84) {                // 풍선 가게: 기둥 + 풍선 다발
+      solid(B, s, x, base + 3.5, 0.15, 3.5, 0.15, 'pole');
+      B.sph(s, x, base + 8, 1.8, 'balloon');
+      B.add('balloonpole', { s, x, base, seed });
+    } else {                                  // 나무 두 그루
+      for (const dz of [-2.5, 2.5]) { solid(B, s + dz, x, base + 1.7, 0.3, 1.7, 0.3, 'tree'); B.sph(s + dz, x, base + 5, 2.3, 'tree'); B.add('tree', { s: s + dz, side, x, base, kind: 'park', seed: seed + dz }); }
+    }
+  });
 }

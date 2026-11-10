@@ -309,6 +309,7 @@ function tportal(B, d, ctx) {
 function canyongate(B, d, ctx) {
   const z = Z(d.s), W = (d.w || 16.6) + 1.2;
   B.metal.box(0, 47, z, W, 2, 0.8, mulc(K.white, 0.8));
+  for (const s of [-1, 1]) B.metal.box(s * W, 24, z, 0.8, 24, 0.8, mulc(K.white, 0.75));
   ctx.signs.push({ x: 0, y: 47, z: z + 0.82, w: Math.min(22, 2 * W - 2), h: 2.8, ry: 0, text: 'SUNRISE COAST · 해안 리조트', color: '#ffcf7a', fixed: true });
 }
 
@@ -316,6 +317,11 @@ function rock(B, d) {
   const rng = makeRng(d.seed), z = Z(d.s), b = d.base || 0;
   B.prop.box(d.x, b + d.h / 2, z, d.hw, d.h / 2, d.hw, mulc(K.rock, 0.75 + rng() * 0.3), { bevel: Math.min(1.5, d.hw * 0.3) });
   B.grass.box(d.x, b + d.h - 0.1, z, d.hw - 0.5, 0.14, d.hw - 0.5, mulc(K.grass, 0.8 + rng() * 0.3));
+}
+function support(B, d) {
+  const z = Z(d.s), hy = (d.top - d.base) / 2, cy = (d.top + d.base) / 2;
+  if (d.style === 'steel') { B.metal.box(d.x, cy, z, d.hw, hy, d.hz || d.hw, mulc(K.steel, 0.75)); for (let y = d.base + 3; y < d.top - 1; y += 6) B.metal.box(d.x, y, z, d.hw + 0.06, 0.08, (d.hz || d.hw) + 0.06, K.dark); }
+  else B.prop.box(d.x, cy, z, d.hw, hy, d.hz || d.hw, mulc(K.conc, 0.85), { bevel: Math.min(0.15, d.hw * 0.3) });
 }
 function planter(B, d) { const z = Z(d.s), b = d.base || 0; B.prop.box(d.x, b / 2, z, 1.4, -b / 2, 1.4, mulc(K.white, 0.85), { bevel: 0.1 }); B.grass.box(d.x, 0.02, z, 1.3, 0.04, 1.3, K.grass); }
 function platform(B, d) {
@@ -330,7 +336,7 @@ function scaffold(B, d) {
 }
 // 놀이공원 장식은 parkProps.js
 export const SCENE_EMIT = {
-  rock, planter, platform, scaffold,
+  support, rock, planter, platform, scaffold,
   pole, bench, fountain, parkgate, skel, hoard, sitegate, crane, pit, slabfloor, overpass, banner, skybridge, powerline, pipebridge, lines,
   lowcity, pier, neonsign, marketgate, plantwall, tank, stack, containers, gantry, plantgate, btower, bcable, skyline, hill, tportal, canyongate,
 };

@@ -9,7 +9,7 @@ import { makeBox, makeSphere } from '../collision.js';
 import { makeRng, m3MulV, rotY } from '../math.js';
 import { VEH, VEH_COLORS } from '../vehicles.js';
 import { entityZRange, entityBounds } from '../obstacles.js';
-import { Track, frameOf, toWorld, shapeToWorld, straightGround } from '../track.js';
+import { Track, frameOf, toWorld, shapeToWorld, straightGround, arcAt } from '../track.js';
 
 const NO_ZONE_CHECK = new Set(['lamp', 'tree', 'prop', 'ledge', 'bldg', 'building', 'rock', 'tank', 'stack', 'tower', 'crane', 'gate', 'planter']);
 export const CAR_HALF_H = 0.55;       // 질량중심 ~ 지붕/바퀴 바닥 거리
@@ -50,7 +50,21 @@ export class MapBuilder {
   }
   ramp(L, dy, o = {}) { return this.run(L, { ...o, y: this.cursor.y + dy }); }
   // 꺾기: +는 오른쪽, -는 왼쪽 (도). 이음매에는 모서리 판이 깔린다
-  turn(deg) { this.cursor.h += (deg * Math.PI) / 180; }
+  // 원호 곡선으로 꺾기: +는 오른쪽, -는 왼쪽 (도). R = 도로 중심선 반지름 (기본: 폭에 맞춰 자동)
+  turn(deg, R) {
+    const c = this.cursor, th = Math.abs(deg) * Math.PI / 180, d = deg >= 0 ? 1 : -1;
+    if (!th) return;
+    R = R || Math.max(10, c.w * 1.8);
+    const L = R * th;
+    const p = { kind: 'arc', s0: c.s, L, x0: c.x, z0: c.z, h: c.h, R, d, th, w: c.w, y0: c.y, y1: c.y, solid: true, surf: c.surf, sec: this.cur };
+    p.cx = c.x + d * R * Math.cos(c.h); p.cz = c.z + d * R * Math.sin(c.h);
+    this.route.push(p);
+    const e = arcAt(p, L);
+    c.s += L; c.x = e.x; c.z = e.z; c.h = e.h;
+    return [p.s0, p.s0 + L];
+  }
+  // 헤어핀(180° U턴): 옆 길과 겹치지 않는 가장 작은 반지름
+  uturn(dir = 1) { return this.turn(180 * dir, this.cursor.w + 1); }
   surf(name) { this.cursor.surf = name; }
   pieceAt(s) { const R = this.route; for (let i = R.length - 1; i >= 0; i--) if (s >= R[i].s0) return R[i]; return R[0]; }
   wAt(s) { if (!this.route.length || s >= this.cursor.s) return this.cursor.w; return this.pieceAt(s).w; }
@@ -86,6 +100,7 @@ export class MapBuilder {
     this.checkpoints.push({ id, s, x: 0, sec: this.cur });
     if (!o.noPad) this.pad(s - 6, s + Math.min(30, o.padLen || 30), { cp: id });
     this.add('cp', { s, id, w: this.wAt(s), style: o.style });
+    for (const sd of [-1, 1]) this.anchor(s, sd * (this.wAt(s) + 0.5), 0.3, 8, { tag: 'gate', style: 'steel' });
     return id;
   }
   // 넓은 쉼터(체크포인트 + 충전): 길이 L, 반폭 w
@@ -109,6 +124,15 @@ export class MapBuilder {
 
   // ───────── 정적 장애물 (경로 위) ─────────
   span(s, o) { const W = this.wAt(s) + 0.1; return [o.x0 !== undefined ? o.x0 : -W, o.x1 !== undefined ? o.x1 : W]; }
+  // 받침 기둥: 길 가장자리 밖(낭떠러지 위)에 있는 구조물의 다리를 바닥(floorY)까지 내린다 (보이는 그대로 충돌)
+  // s, x = 기둥 위치(로컬), hw = 반폭, top = 기둥 윗면 높이(노면 기준)
+  anchor(s, x, hw = 0.4, top = 0, o = {}) {
+    if (Math.abs(x) - hw < this.wAt(s) - 0.05) return;            // 길 위에 서 있으면 필요 없음
+    const base = this.floorY - this.yAt(s);
+    if (top - base < 0.5) return;
+    const b = makeBox(x, (base + top) / 2, -s, hw, (top - base) / 2, o.hz || hw); b.tag = o.tag || 'support'; b.sec = this.cur; this.statics.push(b);
+    this.add('support', { s, x, hw, hz: o.hz || hw, base, top, style: o.style || 'concrete' });
+  }
   // 길을 가로막는 장벽. h=높이, spikes=위쪽 가시 높이, wire=전선 간격
   wall(s, o = {}) {
     const h = o.h, t = o.t || 1.2, sp = o.spikes || 0, [x0, x1] = this.span(s, o);
@@ -167,11 +191,12 @@ export class MapBuilder {
   ceiling(s0, s1, y, o = {}) {
     const sp = o.spikes || 0, c = (s0 + s1) / 2, hz = (s1 - s0) / 2, W = this.wAt(c) + (o.wide || 0.4);
     const b = makeBox(0, y + 2.5, -c, W, 2.5, hz); b.tag = 'ceiling'; b.sec = this.cur; this.statics.push(b);
-    if (o.walls !== false) for (const sd of [-1, 1]) { const wb = makeBox(sd * (W + 0.5), (y + 5) / 2, -c, 0.5, (y + 5) / 2, hz); wb.tag = 'building'; wb.sec = this.cur; this.statics.push(wb); }
+    const fl = this.floorY - this.yAt(c);
+    if (o.walls !== false) for (const sd of [-1, 1]) { const wb = makeBox(sd * (W + 0.5), (fl + y + 5) / 2, -c, 0.5, (y + 5 - fl) / 2, hz); wb.tag = 'building'; wb.sec = this.cur; this.statics.push(wb); }
     if (!o.overPads) this.checkFree(s0, s1, '천장');
     if (sp) for (let s = s0 + 2; s < s1 - 1; s += o.every || 3.2) this.box(s, 0, y - sp / 2, W, sp / 2, 0.35, 'spike');
     this.ceils.push({ s0, s1, y });
-    this.add('ceil', { s0, s1, y, w: W, spikes: sp, every: o.every || 3.2, style: o.style || 'tunnel', walls: o.walls !== false });
+    this.add('ceil', { s0, s1, y, w: W, fl, spikes: sp, every: o.every || 3.2, style: o.style || 'tunnel', walls: o.walls !== false });
   }
   // 고정 레이저 격자(항상 켜짐). ys 사이의 win번째 틈이 통과 창문
   laserWall(s, ys, o = {}) {
@@ -183,7 +208,7 @@ export class MapBuilder {
     this.flight({ kind: 'laser', label: o.label || `레이저 격자 틈 ${ys[k]}~${ys[k + 1]}m`, v0: o.v0 || 8, bands: [{ s0: s - 3.4, s1: s + 3.4, lo, hi }], endS: s + 16, run: o.run });
   }
   pipeRack(s, y) { const [x0, x1] = this.span(s, {}); this.box(s, 0, y, x1, 0.6, 0.7, 'pipe'); this.add('piperack', { s, y, x0, x1 }); }
-  arch(s, y) { const W = this.wAt(s) + 1.5; this.box(s, 0, y, W, 0.8, 0.9, 'cable'); this.add('arch', { s, y, w: W }); }
+  arch(s, y) { const W = this.wAt(s) + 1.5; this.box(s, 0, y, W, 0.8, 0.9, 'cable'); for (const sd of [-1, 1]) this.anchor(s, sd * W, 0.6, y, { tag: 'cable', style: 'steel', hz: 0.8 }); this.add('arch', { s, y, w: W }); }
   spikeStrip(s, x0, x1, o = {}) {
     const d = o.d || 1.6, h = o.h || 0.5;
     this.box(s, (x0 + x1) / 2, h / 2, (x1 - x0) / 2, h / 2, d / 2, 'spike');
@@ -217,42 +242,45 @@ export class MapBuilder {
     const W = this.wAt(s) + 0.4;
     this.box(s, 0, y + 0.65, W, 0.65, 2.0, 'overpass');
     this.box(s, 0, y + 2.3, W, 0.06, 2.0, 'overpass');
+    for (const sd of [-1, 1]) this.anchor(s, sd * (W + 1.6), 1.6, y + 2.4, { tag: 'overpass', hz: 2.2 });
     this.add('overpass', { s, y, w: W, sign: o.sign || '', color: o.color || '#35f0ff' });
   }
   lines(s, ys, o = {}) {
     const kind = o.kind || 'laundry', dy = o.drop !== undefined ? o.drop : (kind === 'lantern' ? 0.9 : kind === 'laundry' ? 1.0 : 0.55), W = this.wAt(s) + 0.3;
-    for (const y of ys) this.box(s, 0, y - dy / 2, W, dy / 2 + 0.05, 0.12, kind === 'laundry' ? 'laundry' : kind === 'lantern' ? 'lantern' : 'bunting');
-    for (const sd of [-1, 1]) this.box(s, sd * (W + 0.2), (ys[ys.length - 1] + 0.5) / 2, 0.18, (ys[ys.length - 1] + 0.5) / 2, 0.18, 'pole');
+    for (const y of ys) this.box(s, 0, y - dy / 2, W, dy / 2 + 0.05, 0.12, kind === 'laundry' ? 'laundry' : kind === 'lantern' ? 'lantern' : kind === 'lights' ? 'lights' : 'bunting');
+    const tag = kind === 'laundry' ? 'laundry' : kind === 'lantern' ? 'lantern' : kind === 'lights' ? 'lights' : 'bunting';
+    for (const sd of [-1, 1]) { this.box(s, sd * (W + 0.2), (ys[ys.length - 1] + 0.5) / 2, 0.18, (ys[ys.length - 1] + 0.5) / 2, 0.18, tag); this.anchor(s, sd * (W + 0.2), 0.18, 0, { tag, style: 'steel' }); }
     this.add('lines', { s, ys, kind, dy, w: W, seed: Math.floor(this.rng() * 1e6) });
   }
   jib(s, y, o = {}) {
     const side = o.side || (this.rng.chance(0.5) ? 1 : -1), hook = o.hook || 0, W = this.wAt(s), hx = -side * Math.min(5, W * 0.4);
     this.box(s, 0, y + 0.9, W + 0.2, 0.9, 0.9, 'crane');
-    this.box(s, side * (W + 6), (y + 9) / 2, 1.0, (y + 9) / 2, 1.0, 'crane');
+    this.box(s, side * (W + 6), (y + 9) / 2, 1.0, (y + 9) / 2, 1.0, 'crane'); this.anchor(s, side * (W + 6), 1.0, 0, { tag: 'crane', style: 'steel' });
     if (hook) { this.box(s, hx, y - hook / 2, 0.06, hook / 2, 0.06, 'crane'); this.box(s, hx, y - hook - 0.5, 2.4, 0.5, 0.7, 'crane'); }
     this.add('crane', { s, y, side, x: side * (W + 6), w: W, hook, hx, top: y + 9 });
   }
   skybridge(s, y0, h = 4, o = {}) {
     const W = this.wAt(s) + 0.4;
     this.box(s, 0, y0 + h / 2, W, h / 2, (o.d || 4) / 2, 'skybridge');
+    for (const sd of [-1, 1]) this.anchor(s, sd * (W + 1.2), 1.2, y0 + h, { tag: 'skybridge', hz: (o.d || 4) / 2 + 0.2 });
     this.add('skybridge', { s, y: y0, h, w: W, d: o.d || 4, hue: o.hue !== undefined ? o.hue : Math.floor(this.rng() * 360) });
   }
   banner(s, y0, y1, o = {}) {
     const W = this.wAt(s);
     this.box(s, 0, (y0 + y1) / 2, W, (y1 - y0) / 2, 0.5, 'banner');
-    for (const sd of [-1, 1]) this.box(s, sd * (W + 0.25), (y1 + 0.2) / 2, 0.2, (y1 + 0.2) / 2, 0.5, 'banner');
+    for (const sd of [-1, 1]) { this.box(s, sd * (W + 0.25), (y1 + 0.2) / 2, 0.2, (y1 + 0.2) / 2, 0.5, 'banner'); this.anchor(s, sd * (W + 0.25), 0.2, 0, { tag: 'banner', style: 'steel', hz: 0.5 }); }
     this.add('banner', { s, y0, y1, w: W, text: o.text || 'TEMU', hue: o.hue !== undefined ? o.hue : Math.floor(this.rng() * 360) });
   }
   powerline(s, ys) {
     const W = this.wAt(s) + 6;
     for (const y of ys) this.box(s, 0, y, W, 0.09, 0.09, 'wire');
-    for (const sd of [-1, 1]) this.box(s, sd * (W - 4), ys[ys.length - 1] / 2 + 1, 1.4, ys[ys.length - 1] / 2 + 1, 1.4, 'pylon');
+    for (const sd of [-1, 1]) { this.box(s, sd * (W - 4), ys[ys.length - 1] / 2 + 1, 1.4, ys[ys.length - 1] / 2 + 1, 1.4, 'pylon'); this.anchor(s, sd * (W - 4), 1.4, 0, { tag: 'pylon', style: 'steel' }); }
     this.add('powerline', { s, ys, w: W });
   }
   pipeBridge(s, y, o = {}) {
     const W = this.wAt(s) + 1;
     this.box(s, 0, y, W, o.kind === 'conveyor' ? 0.9 : 0.7, o.kind === 'conveyor' ? 1.6 : 0.8, o.kind === 'conveyor' ? 'conveyor' : 'pipe');
-    for (const sd of [-1, 1]) this.box(s, sd * (W + 0.5), y / 2, 0.5, y / 2, 0.6, 'pipe');
+    for (const sd of [-1, 1]) { this.box(s, sd * (W + 0.5), y / 2, 0.5, y / 2, 0.6, 'pipe'); this.anchor(s, sd * (W + 0.5), 0.5, 0, { tag: 'pipe', style: 'steel', hz: 0.6 }); }
     this.add('pipebridge', { s, y, w: W, kind: o.kind || 'pipe' });
   }
 
@@ -286,13 +314,13 @@ export class MapBuilder {
     this.sph(s, x, 5.0, 2.3, 'tree');
     this.add('tree', { s, side, x, kind: o.kind || 'round', seed: Math.floor(this.rng() * 1e6) });
   }
-  sign(s, side, text, o = {}) { this.add('sign', { s, side, x: side * (this.wAt(s) + 1.2), text, color: o.color || '#39ff88', big: !!o.big }); }
+  sign(s, side, text, o = {}) { const x = side * (this.wAt(s) + 1.2); this.anchor(s, x, 0.3, 0, { tag: 'sign', style: 'steel' }); this.add('sign', { s, side, x, text, color: o.color || '#39ff88', big: !!o.big }); }
   billboard(s, side, o = {}) { this.add('billboard', { s, side, x: side * (this.wAt(s) + 2), text: o.text || 'TEMU', hue: o.hue !== undefined ? o.hue : Math.floor(this.rng() * 360) }); }
   // 가로등을 일정 간격으로
   lamps(s0, s1, every = 32) {
     for (let s = s0 + 8, k = 0; s < s1 - 4; s += every, k++) {
       const p = this.pieceAt(s);
-      if (!p.solid || this.wAt(s) < 3.5 || s - p.s0 < p.w + 3 || p.s0 + p.L - s < p.w + 3) continue;     // 꺾이는 모서리 근처는 비움
+      if (!p.solid || p.kind === 'arc' || this.wAt(s) < 3.5 || s - p.s0 < p.w + 3 || p.s0 + p.L - s < p.w + 3) continue;     // 곡선/모서리 근처는 비움
       this.lamp(s, k % 2 ? 1 : -1);
     }
   }
@@ -315,6 +343,7 @@ export class MapBuilder {
       const tx = -(this.wAt(s) + 2);
       this.box(s, tx, (e.py + 3) / 2, 0.6, (e.py + 3) / 2, 0.6, 'crane');
       const jl = Math.abs(e.px - tx) + 1; this.box(s, tx + jl / 2, e.py + 0.3, jl / 2, 0.3, 0.3, 'crane');
+      this.anchor(s, tx, 0.6, 0, { tag: 'crane', style: 'steel' });
       e.tx = tx;
     }
     return e;
@@ -373,9 +402,9 @@ export class MapBuilder {
     this.track = track;
     // 옆 발판 → 월드 지면 판
     const plats = this.platforms.map((q) => {
-      const p = track.pieceAt(q.ls), a = q.ls - p.s0, yb = this.yAt(q.ls) + q.dy;
-      const cx = p.x0 + a * p.fx + q.lx * p.rx, cz = p.z0 + a * p.fz + q.lx * p.rz;
-      return { x0: cx, z0: cz, fx: p.fx, fz: p.fz, rx: p.rx, rz: p.rz, a0: -q.len / 2, a1: q.len / 2, w: q.hw, y0: yb, y1: yb, surf: q.surf, piece: -1, s0: q.ls };
+      const fr = track.frameAt(q.ls), yb = this.yAt(q.ls) + q.dy;
+      const w = toWorld(fr, q.lx, 0, -q.ls), fx = Math.sin(fr.h), fz = -Math.cos(fr.h);
+      return { x0: w[0], z0: w[2], fx, fz, rx: Math.cos(fr.h), rz: Math.sin(fr.h), a0: -q.len / 2, a1: q.len / 2, w: q.hw, y0: yb, y1: yb, surf: q.surf, piece: -1, s0: q.ls };
     });
     this.track = new Track(this.route, plats);
     // 풍경 (경로가 확정된 뒤 겹침 검사하며 배치)
@@ -395,8 +424,13 @@ export class MapBuilder {
           const lo = Math.max(a, p.s0), hi = Math.min(z, p.s0 + p.L);
           if (hi - lo < 0.01) continue;
           covered += hi - lo;
-          const sub = makeBox(b.c[0], b.c[1], -(lo + hi) / 2, b.h[0], b.h[1], (hi - lo) / 2);
-          const w = shapeToWorld(frameOf(p, (lo + hi) / 2), sub); w.tag = b.tag; w.sec = b.sec; if (b.fid) w.fid = b.fid; world.push(w);
+          // 곡선 조각 위에서는 4m 이하로 잘라 곡선을 따라가게 한다
+          const n = p.kind === 'arc' ? Math.max(1, Math.ceil((hi - lo) / 4)) : 1, step = (hi - lo) / n;
+          for (let j = 0; j < n; j++) {
+            const l0 = lo + j * step, l1 = l0 + step;
+            const sub = makeBox(b.c[0], b.c[1], -(l0 + l1) / 2, b.h[0], b.h[1], (l1 - l0) / 2 + (n > 1 ? 0.15 : 0));
+            const w = shapeToWorld(frameOf(p, (l0 + l1) / 2), sub); w.tag = b.tag; w.sec = b.sec; if (b.fid) w.fid = b.fid; world.push(w);
+          }
         }
         if (!covered) { const w = shapeToWorld(track.frameAt(s), b); w.tag = b.tag; w.sec = b.sec; world.push(w); }
       } else {

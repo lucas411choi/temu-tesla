@@ -197,4 +197,48 @@ export function parkCeil(B, d) {
   return true;
 }
 
-export const PARK_EMIT = { canopy, cupbase, wheelbase, swingframe, track, droptower, swinger, parkentry, hauntface, crate };
+// ───────── 놀이공원 바닥 구조물 (충돌 상자는 shared/maps/scenery.js parkGround) ─────────
+function tent(B, d, ctx) {
+  const z = Z(d.s), b = d.base, c1 = paint(d.hue, 0.95, 0.85), c2 = mulc(K.white, 0.95);
+  for (let k = 0; k < 12; k++) {
+    const a0 = k * Math.PI / 6, a1 = (k + 1) * Math.PI / 6, col = k % 2 ? c1 : c2;
+    const P = (a, r, y) => [d.x + Math.cos(a) * r, b + y, z + Math.sin(a) * r];
+    B.prop.quadOut(P(a0, d.r, 0), P(a1, d.r, 0), P(a1, d.r, d.h), P(a0, d.r, d.h), [Math.cos((a0 + a1) / 2), 0, Math.sin((a0 + a1) / 2)], col);
+    B.prop.triOut(P(a0, d.r + 0.4, d.h), P(a1, d.r + 0.4, d.h), [d.x, b + d.h + d.roof, z], [0, 1, 0], col === c1 ? c2 : c1);
+  }
+  B.metal.box(d.x, b + d.h + d.roof + 0.8, z, 0.06, 0.8, 0.06, K.dark);
+  B.glow.box(d.x + 0.4, b + d.h + d.roof + 1.4, z, 0.4, 0.25, 0.02, neon(d.hue + 180, 3));
+  for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; B.glow.box(d.x + Math.cos(a) * (d.r + 0.4), b + d.h, z + Math.sin(a) * (d.r + 0.4), 0.12, 0.12, 0.12, [6, 4.4, 1.8]); }
+}
+function pavilion(B, d) {
+  const z = Z(d.s), b = d.base, R = d.r, c1 = paint(d.hue, 0.95, 0.7);
+  B.prop.cyl(d.x, b, z, R, 0.5, 16, mulc(K.white, 0.85));
+  B.prop.cyl(d.x, b + 0.5, z, 0.6, 5.8, 10, K.yellow);
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, px = d.x + Math.cos(a) * R * 0.75, pz = z + Math.sin(a) * R * 0.75; B.metal.box(px, b + 3.3, pz, 0.05, 2.8, 0.05, K.yellow); B.prop.box(px, b + 1.9 + (k % 2) * 0.5, pz, 0.3, 0.35, 0.7, paint(k * 45, 0.95, 0.6)); }
+  B.prop.cyl(d.x, b + 6.3, z, R + 0.4, 0.6, 16, c1);
+  B.prop.cyl(d.x, b + 6.9, z, R + 0.4, 2.6, 16, mulc(K.white, 0.95), { r2: 0.4 });
+  for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; B.glow.box(d.x + Math.cos(a) * (R + 0.42), b + 6.6, z + Math.sin(a) * (R + 0.42), 0.1, 0.1, 0.1, neon(k * 22, 3)); }
+}
+function loop(B, d) {
+  const z = Z(d.s), col = paint(d.hue, 0.95, 0.85);
+  for (let k = 0; k < 24; k++) {
+    const a0 = k * Math.PI / 12, a1 = (k + 1) * Math.PI / 12;
+    for (const dz of [-0.4, 0.4]) B.metal.beam([d.x + Math.cos(a0) * d.R, d.cy + Math.sin(a0) * d.R, z + dz], [d.x + Math.cos(a1) * d.R, d.cy + Math.sin(a1) * d.R, z + dz], 0.18, 0.18, col);
+    if (k % 2 === 0) B.metal.beam([d.x + Math.cos(a0) * d.R, d.cy + Math.sin(a0) * d.R, z - 0.4], [d.x + Math.cos(a0) * d.R, d.cy + Math.sin(a0) * d.R, z + 0.4], 0.08, 0.08, mulc(K.steel, 1.1));
+  }
+  for (const dx of [-d.R * 0.7, d.R * 0.7]) B.metal.box(d.x + dx, d.base + (d.cy - d.base - d.R * 0.4) / 2, z, 0.3, (d.cy - d.base - d.R * 0.4) / 2, 0.3, mulc(col, 0.8));
+}
+function kiosk(B, d, ctx) {
+  const z = Z(d.s), b = d.base, c1 = paint(d.hue, 0.95, 0.75);
+  B.prop.box(d.x, b + d.h / 2, z, d.hx, d.h / 2, d.hz, mulc(K.white, 0.9), { bevel: 0.08 });
+  for (let k = -d.hz + 0.5; k < d.hz; k += 1.0) B.prop.box(d.x, b + d.h + 0.15, z + k, d.hx + 0.5, 0.15, 0.25, (Math.round(k) % 2) ? c1 : mulc(K.white, 1));
+  B.glow.box(d.x, b + d.h * 0.62, z + d.hz + 0.02, d.hx * 0.8, 0.12, 0.02, neon(d.hue + 120, 2.6));
+  ctx.signs.push({ x: d.x, y: b + d.h + 0.9, z: z + d.hz * 0.2, w: Math.min(5, 2 * d.hx), h: 1.0, ry: 0, text: d.food, color: '#ffe27a', fixed: true });
+}
+function balloonpole(B, d) {
+  const z = Z(d.s), b = d.base, rng = makeRng(d.seed);
+  B.metal.box(d.x, b + 3.5, z, 0.12, 3.5, 0.12, K.white);
+  B.prop.box(d.x, b + 0.5, z, 1.2, 0.5, 0.8, paint(Math.floor(rng() * 360), 0.9, 0.7));
+  for (let k = 0; k < 7; k++) { const a = k * 0.9, r = k ? 1.1 : 0, cx = d.x + Math.cos(a) * r, cz = z + Math.sin(a) * r, cy = b + 8 + (k % 3) * 0.4 - 0.4; B.prop.cyl(cx, cy - 0.6, cz, 0.55, 1.2, 8, paint(Math.floor(rng() * 360), 0.95, 0.85), { r2: 0.4, bottom: true }); B.metal.beam([d.x, b + 7, z], [cx, cy - 0.6, cz], 0.02, 0.02, K.dark); }
+}
+export const PARK_EMIT = { tent, pavilion, loop, kiosk, balloonpole, canopy, cupbase, wheelbase, swingframe, track, droptower, swinger, parkentry, hauntface, crate };

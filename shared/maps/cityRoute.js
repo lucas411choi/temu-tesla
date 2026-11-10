@@ -5,11 +5,17 @@ import { cityScene, siteScene, industrialScene, rocks, palms } from './scenery.j
 const mid = (r) => (r[0] + r[1]) / 2;
 // 직선 구간 양옆 난간 (꺾이는 모서리 근처는 비워 둔다)
 function rails(B, r, style) { const w = B.wAt(mid(r)), a = r[0] + w * 1.3, b = r[1] - w * 1.3; if (b - a > 8) for (const sd of [-1, 1]) B.guardrail(a, b, sd, { style }); }
+// 터널 입구/출구 정면 (보이는 그대로 충돌): 천장 위 벽 + 양옆 블록 + 받침
+function portalSolid(B, s, dir, y, w) {
+  const W = w + 1, F = W + 14, off = dir > 0 ? 0.2 : -0.2, ss = s - off;
+  B.box(ss, 0, (y + 40) / 2, F, (40 - y) / 2, 0.6, 'rock');
+  for (const sd of [-1, 1]) { B.box(ss, sd * (W + 7), y / 2, 7, y / 2, 0.6, 'rock'); B.anchor(ss, sd * (W + 7), 7, 0, { tag: 'rock', hz: 0.6 }); }
+}
 // 지그재그 비계 오르막: n 개의 경사로를 U턴으로 잇는다 (옆으로 겹치지 않게 간격 = 2w+2)
 function switchback(B, n, L, rise, w, dir, surf) {
   for (let i = 0; i < n; i++) {
     B.ramp(L, rise, { w, surf });
-    if (i < n - 1) { const d = (i % 2 ? -1 : 1) * dir; B.turn(90 * d); B.run(2 * w + 2, { w }); B.turn(90 * d); }
+    if (i < n - 1) B.uturn((i % 2 ? -1 : 1) * dir);           // 헤어핀 곡선으로 되돌아 올라간다
   }
 }
 // 도심 날먹 방지 묶음: 육교 + 전광판 + 스카이브리지
@@ -23,16 +29,16 @@ export function c1(B) {
   const s0 = B.s;
   B.run(90, { w: 8, surf: 'road' });
   B.checkpoint(14, { noPad: true }); B.pad(0, 82);
-  B.hint(0, 50, 'start'); B.hint(50, 92, 'wheels');
+  B.hint(0, 50, 'start'); B.hint(50, 90, 'wheels');
   B.sign(40, 1, 'Q W : 전진   A S : 후진', { big: true });
-  B.turn(90);
+  const tc = B.turn(90);
   const r2 = B.run(80);
-  B.hint(92, 175, 'turn');
+  B.hint(tc[0] - 10, r2[1], 'turn');
   B.sign(r2[0] + 6, -1, '꺾기 전에 스페이스로 감속!', {});
   B.slalom(r2[0] + 22, r2[1] - 14, { step: 26, gapW: 9, start: 0 });
   B.turn(-90);
-  B.plaza(44, 8);
-  B.hint(175, 222, 'fuel');
+  const pz1 = B.plaza(44, 8);
+  B.hint(pz1[0], pz1[1], 'fuel');
   const r4 = B.run(110);
   B.hint(r4[0], r4[0] + 40, 'single'); B.hint(r4[0] + 40, r4[0] + 74, 'lift'); B.hint(r4[0] + 74, r4[1], 'four');
   B.sign(r4[0] + 12, 1, 'E R D F : 배출구 (한 개만 눌러 보기)', { big: true });
@@ -53,18 +59,22 @@ export function c1(B) {
   B.hop(r7[0] + 50, 2.0, { label: '튜토리얼 마지막 장벽', v0: 8 });
   B.lamps(s0, B.s, 30);
   const sEnd = B.s;
-  // 골목 → 동네 공원 (넓은 잔디 광장)
+  // 골목 → 동네 공원: 잔디 광장 → 나무 사이 산책로(슬라롬) → 분수 물줄기 → 산울타리 넘기
   B.turn(90);
-  B.plaza(60, 14, { surf: 'park' });
+  B.plaza(48, 12, { surf: 'park' });
+  const pr = B.run(100, { w: 7, surf: 'park' });
+  for (const [d, x] of [[10, -3.5], [20, 3.0], [30, -2.0], [40, 3.5], [48, -3.5]]) B.tree(pr[0] + d, x > 0 ? 1 : -1, { x: Math.abs(x), kind: 'park' });
+  B.vents(pr[0] + 64, { kind: 'water', n: 3, x0: -4.5, dx: 4.5, H: 5, w: 1.8, P: 4, on: 1.3, warn: 0.9, phStep: 0.8 });
+  B.hop(pr[0] + 86, 1.8, { style: 'hedge', label: '산울타리 1.8m' });
+  B.add('parkbench', { s: pr[0] + 4, w: 7 });
   const sEndJob = B.s;
-  B.scenery((B, T) => { cityScene(B, T, s0, sEnd, 'alley'); cityScene(B, T, sEnd, sEndJob, 'park', { hmin: 18, hmax: 30, gap: 6, jitter: 10 }); });
+  B.scenery((B, T) => { cityScene(B, T, s0, sEnd, 'alley'); cityScene(B, T, sEnd, sEndJob, 'alley', { hmin: 10, hmax: 16, gap: 3, jitter: 6 }); });
 }
 
 // ───────── 2. 도심 대로 (블록마다 꺾이는 시내 + 육교 우회) ─────────
 export function c2(B) {
   const s0 = B.s;
   B.turn(-90);
-  B.plaza(44, 9);
   const r1 = B.run(130, { w: 9, surf: 'road' });
   B.traffic(r1[1] - 4, { x: -4.5, v: 13, len: 110, P: 9.5, ph: 0, vk: 'taxi' });
   B.traffic(r1[1] - 4, { x: 4.5, v: 11, len: 110, P: 11, ph: 4, vk: 'suv' });
@@ -87,6 +97,7 @@ export function c2(B) {
   B.crossTraffic(r3[0] + 84, { vk: 'bus', v: 10, P: 9, ph: 0, xs: -44, len: 88 });
   B.crossTraffic(r3[0] + 88, { vk: 'truck', v: 12, P: 9, ph: 4.5, xs: 44, dir: -1, len: 88 });
   B.turn(90);
+  B.plaza(44, 9);
   const r4 = B.run(120);
   B.traffic(r4[1] - 4, { x: -4.5, v: 18, len: 100, P: 8, ph: 0, vk: 'police', siren: true });
   B.traffic(r4[1] - 4, { x: 4.5, v: 18, len: 100, P: 8, ph: 4, vk: 'police', siren: true });
@@ -106,6 +117,7 @@ export function c3(B) {
   B.plaza(44, 8, { surf: 'dirt' });
   B.add('sitegate', { s: s0 + 2, w: 8 });
   B.box(s0 + 2, 0, 12.6, 8.4, 0.9, 0.6, 'gate');
+  for (const sd of [-1, 1]) { B.box(s0 + 2, sd * 8.6, 6.75, 0.55, 6.75, 0.6, 'gate'); B.anchor(s0 + 2, sd * 8.6, 0.55, 0, { tag: 'gate' }); }
   const r1 = B.run(60, { w: 7, surf: 'dirt' });
   B.hop(r1[0] + 18, 3.0, { label: '콘크리트 장벽 3.0m', style: 'concrete' });
   for (let i = 0; i < 2; i++) B.spikeStrip(r1[0] + 38 + i * 11, i % 2 ? -7 : -1, i % 2 ? 1 : 7, { d: 2.0 });
@@ -185,6 +197,7 @@ export function c5(B) {
   B.plaza(44, 7);
   B.add('marketgate', { s: s0 + 2, w: 7, text: '야시장 NIGHT MARKET' });
   B.box(s0 + 2, 0, 13.6, 7.2, 1.6, 0.6, 'gate');
+  for (const sd of [-1, 1]) { B.box(s0 + 2, sd * 7.6, 7.5, 0.6, 7.5, 0.6, 'gate'); B.anchor(s0 + 2, sd * 7.6, 0.6, 0, { tag: 'gate' }); }
   const r1 = B.run(56, { w: 4.5, surf: 'alley' });
   [14, 30].forEach((d, i) => B.laserTrip(r1[0] + d, { ys: [0.55, 1.45], blink: { P: 3.4, on: 1.4, warn: 0.8, ph: -i * 1.7 } }));
   B.lines(r1[0] + 44, LANTERN, { kind: 'lantern' });
@@ -282,7 +295,7 @@ export function c7(B) {
   B.run(30);
   for (const [r, d] of [[d1, 20], [d2, 20], [d3, 20], [d4, 20]]) {
     const s = r[0] + d;
-    for (const sd of [-1, 1]) B.box(s, sd * 9.2, 29, 1.3, 29 + 12, 1.6, 'tower');
+    for (const sd of [-1, 1]) { B.box(s, sd * 9.2, 29, 1.3, 29, 1.6, 'tower'); B.anchor(s, sd * 9.2, 1.3, 0, { tag: 'tower', hz: 1.6 }); }
     B.box(s, 0, 32.5, 10.5, 1.5, 1.6, 'tower'); B.box(s, 0, 54, 10.5, 2, 1.6, 'tower');
     B.add('btower', { s, H: 58, x: 9.2 });
   }
@@ -295,7 +308,7 @@ export function c8(B) {
   B.plaza(44, 8);
   const t1 = B.run(150, { w: 7, surf: 'road' });
   B.ceiling(t1[0], t1[1] - 5, 7.5, { style: 'tunnel' });
-  B.add('tportal', { s: t1[0], dir: 1, y: 7.5, w: 7 });
+  B.add('tportal', { s: t1[0] + 0.7, dir: 1, y: 7.5, w: 7 }); portalSolid(B, t1[0] + 0.7, 1, 7.5, 7);
   B.traffic(t1[1] - 4, { x: -3.5, v: 18, len: 130, P: 8, ph: 0, vk: 'sedan' });
   B.traffic(t1[1] - 4, { x: 3.5, v: 16, len: 130, P: 11, ph: 4, vk: 'police', siren: true });
   B.turn(45);
@@ -320,7 +333,7 @@ export function c8(B) {
   }
   B.wireSpan(t4[0] + 80, 1.6, { sparks: true });
   B.vents(t4[0] + 104, { kind: 'arc', n: 3, x0: -4.5, dx: 4.5, H: 4.5, w: 1.4, P: 3.6, on: 1.0, warn: 0.9, phStep: 0.9 });
-  B.add('tportal', { s: t4[1] - 5, dir: -1, y: 7.5, w: 7 });
+  B.add('tportal', { s: t4[1] - 5.7, dir: -1, y: 7.5, w: 7 }); portalSolid(B, t4[1] - 5.7, -1, 7.5, 7);
   B.turn(45);
   B.plaza(44, 8);
   const sEndJob = B.s;
@@ -365,6 +378,8 @@ export function c10(B) {
   const s0 = B.s;
   B.plaza(44, 7, { surf: 'boardwalk' });
   B.add('canyongate', { s: s0 + 2, w: 7 });
+  B.box(s0 + 2, 0, 47, 8.2, 2, 0.8, 'gate');
+  for (const sd of [-1, 1]) { B.box(s0 + 2, sd * 8.2, 24, 0.8, 24, 0.8, 'gate'); B.anchor(s0 + 2, sd * 8.2, 0.8, 0, { tag: 'gate' }); }
   const r1 = B.run(60, { w: 6, surf: 'boardwalk' });
   B.vents(r1[0] + 20, { n: 4, x0: -4.5, dx: 3, phStep: 0.6, P: 4.2, on: 1.1, warn: 1.0, w: 2.0 });
   B.lines(r1[0] + 46, FLAGS, { kind: 'bunting' });

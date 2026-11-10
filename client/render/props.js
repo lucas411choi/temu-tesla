@@ -108,6 +108,7 @@ function lamp(B, d, ctx) {
   ctx.lamps.push([xl, 8.5, z]);
 }
 function tree(B, d, ctx) {
+  if (d.base) { B.prop.save().translate(0, d.base, 0); try { tree(B, { ...d, base: 0 }, ctx); } finally { B.prop.restore(); } return; }
   const rng = makeRng(d.seed), x = d.x !== undefined ? d.x : d.side * 15.3, z = Z(d.s);
   if (d.kind === 'palm') {
     // 야자수: 휜 줄기 + 잎 8장 (충돌 구 r=2.3, y=5 안에 들어감)
@@ -273,7 +274,8 @@ function portal(B, d) {
 function ceil(B, d) {
   if (parkCeil(B, d)) return;
   const [a, b] = clipOf(d), len = b - a, z = Z((a + b) / 2), y = d.y, W = d.w || 16.6;
-  if (d.walls !== false) for (const s of [-1, 1]) B.prop.box(s * (W + 0.5), (y + 5) / 2, z, 0.5, (y + 5) / 2, len / 2, d.style === 'slab' ? mulc(K.conc, 0.7) : d.style === 'office' ? mulc(K.white, 0.6) : hex(0x474b54), { bevel: 0.08 });
+  const fl = d.fl !== undefined ? d.fl : 0;
+  if (d.walls !== false) for (const s of [-1, 1]) B.prop.box(s * (W + 0.5), (fl + y + 5) / 2, z, 0.5, (y + 5 - fl) / 2, len / 2, d.style === 'slab' ? mulc(K.conc, 0.7) : d.style === 'office' ? mulc(K.white, 0.6) : hex(0x474b54), { bevel: 0.08 });
   if (d.style === 'slab' || d.style === 'office') {
     B.prop.box(0, y + 2.5, z, W + 1, 2.5, len / 2, d.style === 'office' ? mulc(K.white, 0.75) : mulc(K.conc, 0.75), { bevel: 0.08 });
     for (const k of every(d, 3, 7, a, b)) { B.prop.box(0, y - 0.35, Z(k), W, 0.35, 0.3, mulc(K.concD, 0.9)); }

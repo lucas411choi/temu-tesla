@@ -44,6 +44,7 @@ export function assembleMap({ id, name, seed, sections, env, fuel, floorY = -24,
   const length = B.s;
   B.cur = sections.length;
   B.add('finish', { s: length - 15, w: B.wAt(length - 15), style: extra.finishStyle });
+  for (const sd of [-1, 1]) B.anchor(length - 15, sd * (B.wAt(length - 15) + 1), 0.5, 12, { tag: 'gate', style: 'steel' });
   const { track, statics, localStatics } = B.finalize();
   // 검증 도구가 기록한 비행 구간별 필요 연료량을 데이터에 합친다
   for (const f of B.flights) { const t = fuel[f.id]; if (t) { f.fuelNeed = t.fuel; f.simTime = t.time; f.fuelPlan = +(t.fuel * 1.3).toFixed(1); } }
