@@ -10,9 +10,9 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "validate": "node tools/validate-map.js",
+    "validate": "node tools/validate-map.js && node tools/validate-map.js --map=park",
     "bot-test": "node tools/bot-test.js",
-    "test": "node tools/check-imports.mjs && node tools/test-camera.mjs && node --import ./tools/fake-three/register.mjs tools/smoke-client.mjs && node tools/bot-test.js --inproc && node tools/validate-map.js --no-write"
+    "test": "node tools/check-imports.mjs && node tools/test-camera.mjs && node --import ./tools/fake-three/register.mjs tools/smoke-client.mjs && node tools/bot-test.js --inproc && node tools/validate-map.js --no-write && node tools/validate-map.js --map=park --no-write"
   },
   "dependencies": {
     "express": "^4.21.2",

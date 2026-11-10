@@ -24,6 +24,13 @@ export class HazardView {
       train: new T3.MeshStandardMaterial({ color: 0x4b5a72, roughness: 0.45, metalness: 0.5, flatShading: true }), trainR: new T3.MeshStandardMaterial({ color: 0x8a2d2a, roughness: 0.45, metalness: 0.5, flatShading: true }),
       ac: new T3.MeshStandardMaterial({ color: 0xaab0b8, roughness: 0.55, metalness: 0.5, flatShading: true }), signp: new T3.MeshBasicMaterial({ color: new T3.Color(0.6, 3.2, 3.6), toneMapped: false }),
       bird: new T3.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.1, side: T3.DoubleSide, flatShading: true }),
+      water: new T3.MeshBasicMaterial({ color: new T3.Color(0.5, 1.6, 2.6), transparent: true, opacity: 0.55, depthWrite: false, side: T3.DoubleSide, toneMapped: false }),
+      popcorn: new T3.MeshBasicMaterial({ color: new T3.Color(2.2, 2.0, 1.2), transparent: true, opacity: 0.6, depthWrite: false, side: T3.DoubleSide, toneMapped: false }),
+      ghost: new T3.MeshBasicMaterial({ color: new T3.Color(1.6, 2.2, 2.6), transparent: true, opacity: 0.55, depthWrite: false, side: T3.DoubleSide, toneMapped: false }),
+      paint: new T3.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.25, flatShading: true }),
+      stone: new T3.MeshStandardMaterial({ color: 0x8a8278, roughness: 0.85, metalness: 0.05, flatShading: true }),
+      wood: new T3.MeshStandardMaterial({ color: 0x5a3a26, roughness: 0.7, metalness: 0.05, flatShading: true }),
+      gold: new T3.MeshStandardMaterial({ color: 0xd8a640, roughness: 0.35, metalness: 0.85 }),
     };
     this.stripeMat = new T3.MeshStandardMaterial({ map: tex.stripe, roughness: 0.6, metalness: 0.2 });
     this.unitBox = new T3.BoxGeometry(1, 1, 1);
@@ -83,7 +90,7 @@ export class HazardView {
 
   // ───────── 새 떼 ─────────
   make_birds(e, group, own) {
-    const THREE = this.THREE, crow = e.kind === 'crow';
+    const THREE = this.THREE, crow = e.kind === 'crow' || e.kind === 'bat';
     const col = crow ? hex(0x14161c) : hex(0xe4e8ee), col2 = crow ? hex(0x2a2f3a) : hex(0xaeb6c2);
     const bodyG = this.cached('bird-body-' + e.kind, () => { const b = new MeshBuilder(); b.save().rotX(Math.PI / 2); b.cyl(0, -0.3, 0, 0.11, 0.6, 5, col, { r2: 0.03 }); b.restore(); b.box(0, 0.05, -0.34, 0.07, 0.07, 0.08, col2); b.cone(0, 0.0, 0.25, 0.05, 0.25, 4, col2); return this.geoOf(b); });
     const wingG = this.cached('bird-wing-' + e.kind, () => { const b = new MeshBuilder(); const A = [0, 0, -0.12], B2 = [0.9, 0.06, 0.02], C = [0.12, 0, 0.32]; b.tri(A, B2, C, col2); b.tri(A, C, B2, col2); return this.geoOf(b); });
@@ -176,8 +183,10 @@ export class HazardView {
       let body = null;
       if (kind === 'fire') body = this.mesh(this.unitCone, this.M.fire.clone(), g);
       else if (kind === 'steam') body = this.mesh(this.unitCyl, this.M.steam, g);
+      else if (kind === 'water') body = this.mesh(this.unitCyl, this.M.water, g);
+      else if (kind === 'popcorn') body = this.mesh(this.unitCyl, this.M.popcorn, g);
       else body = this.mesh(this.unitBox, this.M.arc.clone(), g);
-      if (body.material !== this.M.steam) own.push(body.material);
+      if (body.material !== this.M.steam && body.material !== this.M.water && body.material !== this.M.popcorn) own.push(body.material);
       const arcSeg = kind === 'arc' ? [0, 1, 2, 3, 4].map(() => this.mesh(this.unitBox, this.M.arc, g)) : null;
       cols.push({ g, body, warnRing, arcSeg, x });
     }
@@ -188,22 +197,27 @@ export class HazardView {
         o.warnRing.visible = c.stage === 1; if (c.stage === 1) { anyWarn = true; const p = 0.5 + 0.5 * Math.sin(T * 24); o.warnRing.material.opacity = 0.35 + 0.6 * p; o.warnRing.scale.setScalar(e.w * (0.85 + 0.25 * p)); if (Math.random() < 0.3) this.fx.spark([c.x, 0.2, c.z], 1, 3); }
         o.body.visible = c.stage === 2 && c.hh > 0.2;
         if (kind === 'arc') { o.body.visible = false; o.arcSeg.forEach((s, k) => { s.visible = c.stage === 2; if (c.stage !== 2) return; const y0 = (k / 5) * c.hh, y1 = ((k + 1) / 5) * c.hh; s.position.set((Math.random() - 0.5) * e.w, (y0 + y1) / 2, (Math.random() - 0.5) * e.w); s.scale.set(0.12, (y1 - y0) * 1.1, 0.12); s.rotation.z = (Math.random() - 0.5) * 0.9; }); }
-        else if (c.stage === 2) { const fl = 0.92 + 0.12 * Math.sin(T * 40 + i); o.body.scale.set(e.w * 0.55 * fl, c.hh, e.w * 0.55 * fl); if (kind === 'steam') o.body.scale.set(e.w * 0.5, c.hh, e.w * 0.5); }
+        else if (c.stage === 2) { const fl = 0.92 + 0.12 * Math.sin(T * 40 + i); o.body.scale.set(e.w * 0.55 * fl, c.hh, e.w * 0.55 * fl); if (kind !== 'fire') o.body.scale.set(e.w * 0.5 * fl, c.hh, e.w * 0.5 * fl); }
         if (c.stage === 2) {
           anyOn = true;
-          if (kind === 'fire') this.fx.flame([c.x, 0, c.z], e.w, Math.max(2, c.hh * 0.8)); else if (kind === 'steam') this.fx.steam([c.x, 0, c.z], e.w, Math.max(1.5, c.hh * 0.7)); else if (Math.random() < 0.5) this.fx.spark([c.x, c.hh * Math.random(), c.z], 2, 5);
+          if (kind === 'fire') this.fx.flame([c.x, 0, c.z], e.w, Math.max(2, c.hh * 0.8));
+          else if (kind === 'steam' || kind === 'water' || kind === 'popcorn') this.fx.steam([c.x, 0, c.z], e.w, Math.max(1.5, c.hh * 0.7));
+          else if (Math.random() < 0.5) this.fx.spark([c.x, c.hh * Math.random(), c.z], 2, 5);
         }
       });
       const cx = e.x0 + (e.n - 1) * e.dx / 2;
-      this.audio.push({ k: kind === 'steam' ? 'steam' : kind === 'arc' ? 'arc' : 'fire', x: cx, y: 1, z: e.z, lvl: anyOn ? 2 : 0, warn: anyWarn });
+      this.audio.push({ k: kind === 'steam' || kind === 'water' || kind === 'popcorn' ? 'steam' : kind === 'arc' ? 'arc' : 'fire', x: cx, y: 1, z: e.z, lvl: anyOn ? 2 : 0, warn: anyWarn });
     } };
   }
 
   // ───────── 불 비 ─────────
   make_rain(e, group, own) {
     const THREE = this.THREE, pool = [];
+    const fw = e.kind === 'firework';
     for (let i = 0; i < e.cnt + 2; i++) {
-      const ball = this.mesh(this.sphere, this.M.ball, group), ring = new THREE.Mesh(this.ringGeo, this.M.warn.clone()); own.push(ring.material); group.add(ring);
+      let mat = this.M.ball;
+      if (fw) { const h = (i * 0.37) % 1, c = new THREE.Color().setHSL(h, 1, 0.6).multiplyScalar(4); mat = this.M.ball.clone(); mat.color = c; own.push(mat); }
+      const ball = this.mesh(this.sphere, mat, group), ring = new THREE.Mesh(this.ringGeo, this.M.warn.clone()); own.push(ring.material); group.add(ring);
       ball.scale.setScalar(e.r); ring.position.y = 0.08; pool.push({ ball, ring, burst: false });
     }
     return { update: (T, st) => {
@@ -213,9 +227,9 @@ export class HazardView {
         if (it.burst === undefined) {
           p.ball.visible = true; p.ball.position.set(it.x, it.y, it.z); p.ball.rotation.x += 0.1; p.burst = false;
           p.ring.visible = true; p.ring.position.set(it.x, 0.08, it.z); const k = 0.55 + 0.45 * it.f; p.ring.scale.setScalar(1.7 * k); p.ring.material.opacity = 0.35 + 0.55 * it.f;
-          this.fx.flame([it.x, it.y - 0.4, it.z], 0.9, 1.5);
+          if (fw) { if (Math.random() < 0.5) this.fx.spark([it.x, it.y + 0.6, it.z], 2, 3); } else this.fx.flame([it.x, it.y - 0.4, it.z], 0.9, 1.5);
           this.audio.push({ k: 'fire', x: it.x, y: it.y, z: it.z, lvl: 1, warn: it.f > 0.2 });
-        } else if (!p.burst) { p.burst = true; this.fx.spark([it.x, 0.4, it.z], 14, 9); this.fx.flame([it.x, 0, it.z], 2.2, 3); }
+        } else if (!p.burst) { p.burst = true; this.fx.spark([it.x, 0.4, it.z], fw ? 30 : 14, fw ? 14 : 9); if (!fw) this.fx.flame([it.x, 0, it.z], 2.2, 3); }
       });
     } };
   }
@@ -246,6 +260,17 @@ export class HazardView {
   // ───────── 천장 가시판 / 프레스 ─────────
   make_ceil(e, group, own) {
     const THREE = this.THREE, w = e.x1 - e.x0, g = new THREE.Group(); group.add(g);
+    if (e.kind === 'drop') {
+      // 자이로드롭 좌석 링: 양옆 탑(정적)에 매달린 좌석 캐리지 (충돌 = 캐리지 두께 h)
+      const cx = (e.x0 + e.x1) / 2, car = this.mesh(this.unitBox, this.M.gold, g, true); car.scale.set(w, e.h * 0.55, e.d); car.position.set(cx, e.h * 0.45, e.z);
+      const seats = []; for (let x = e.x0 + 1.2; x < e.x1 - 0.6; x += 2.4) for (const dz of [-1, 1]) { const st = this.mesh(this.unitBox, this.M.drum, g, true); st.scale.set(1.6, e.h * 0.45, 0.9); st.position.set(x, e.h * 0.25, e.z + dz * (e.d / 2 - 0.5)); seats.push(st); }
+      const lights = [-1, 1].map((s) => { const l = this.mesh(this.unitBox, this.M.amber.clone(), g); own.push(l.material); l.scale.set(0.6, 0.3, 0.6); l.position.set(cx + s * (w / 2 - 0.4), e.h + 0.1, e.z); return l; });
+      return { update: (T, st) => {
+        g.position.y = st.yb;
+        lights.forEach((l) => { l.material.opacity = st.warn ? (Math.sin(T * 30) > 0 ? 1 : 0.1) : 0.5; });
+        this.audio.push({ k: 'press', x: cx, y: st.yb, z: e.z, lvl: 1, warn: st.warn, yb: st.yb });
+      } };
+    }
     const slab = this.mesh(this.unitBox, this.stripeMat, g, true); slab.scale.set(w, 0.6, e.d); slab.position.set((e.x0 + e.x1) / 2, 0.3, e.z);
     const spikeG = this.cached(`ceilspikes|${w}|${e.d}`, () => { const b = new MeshBuilder(); for (let x = -w / 2 + 0.8; x < w / 2; x += 1.5) for (let z = -e.d / 2 + 0.6; z < e.d / 2; z += 1.2) { b.save().translate(x, 0, z).rotX(Math.PI).cone(0, 0, 0, 0.32, 1.0, 4, hex(0xb9c0ca)); b.restore(); } return this.geoOf(b); });
     const sp = this.mesh(spikeG, this.mats.metal, g, true); sp.position.set((e.x0 + e.x1) / 2, 0, e.z);
@@ -268,6 +293,19 @@ export class HazardView {
     return { update: (T, st) => { disc.position.set(st.pos[0], st.pos[1], st.pos[2]); disc.rotation.z = -T * 14 * (st.pos[0] > 0 ? 1 : 1); if (Math.random() < 0.25) this.fx.spark([st.pos[0], 0.2, st.pos[2]], 2, 4); this.audio.push({ k: 'saw', x: st.pos[0], y: 1, z: st.pos[2], lvl: 1 }); } };
   }
   make_ball(e, group, own) {
+    if (e.kind === 'coffin') {
+      // 유령의 집: 천장에 매달려 흔들리는 관
+      const rope = this.mesh(this.unitBox, this.M.rope, group), coffin = this.mesh(this.unitBox, this.M.wood, group, true), lid = this.mesh(this.unitBox, this.M.ghost, group);
+      coffin.scale.set(e.r * 1.3, e.r * 1.9, e.r * 0.9); lid.scale.set(e.r * 0.5, e.r * 0.5, 0.05);
+      const anchor = this.mesh(this.unitBox, this.M.dark, group); anchor.scale.set(0.6, 0.3, 0.6); anchor.position.set(e.px, e.py + 0.1, e.z);
+      return { update: (T, st) => {
+        const th = st.th;
+        coffin.position.set(st.ball[0], st.ball[1], st.ball[2]); coffin.rotation.set(-th, 0, 0);
+        lid.position.set(st.ball[0], st.ball[1] + 0.2, st.ball[2] + e.r * 0.46); lid.rotation.set(-th, 0, 0);
+        rope.position.set(e.px, e.py - e.L / 2 * Math.cos(th), e.z + e.L / 2 * Math.sin(th)); rope.rotation.set(-th, 0, 0); rope.scale.set(0.08, e.L, 0.08);
+        this.audio.push({ k: 'ball', x: st.ball[0], y: st.ball[1], z: st.ball[2], lvl: 0.5 });
+      } };
+    }
     const rope = this.mesh(this.unitBox, this.M.rope, group), ball = this.mesh(this.sphere, this.stripeMat, group, true);
     ball.scale.setScalar(e.r);
     const tower = this.mesh(this.unitBox, this.M.steel, group); tower.scale.set(1.2, e.py + 3, 1.2); tower.position.set(-15.6, (e.py + 3) / 2, e.z);
@@ -287,7 +325,7 @@ export class HazardView {
   make_debris(e, group, own) {
     const THREE = this.THREE, pool = [];
     for (let i = 0; i < e.n + 1; i++) {
-      const box = this.mesh(this.unitBox, e.kind === 'sign' ? this.M.signp : this.M.ac, group, true), ring = new THREE.Mesh(this.ringGeo, this.M.warn.clone()); own.push(ring.material); group.add(ring);
+      const box = this.mesh(this.unitBox, e.kind === 'sign' ? this.M.signp : e.kind === 'beam' ? this.M.drum : this.M.ac, group, true), ring = new THREE.Mesh(this.ringGeo, this.M.warn.clone()); own.push(ring.material); group.add(ring);
       pool.push({ box, ring, burst: false });
     }
     return { update: (T, st) => {
@@ -305,7 +343,7 @@ export class HazardView {
 
   // ───────── 압착 벽 ─────────
   make_press(e, group, own) {
-    const walls = [-1, 1].map(() => this.mesh(this.unitBox, this.stripeMat, group, true));
+    const walls = [-1, 1].map(() => this.mesh(this.unitBox, e.kind === 'castle' ? this.M.stone : this.stripeMat, group, true));
     const lights = [-1, 1].map((s) => { const l = this.mesh(this.unitBox, this.M.warn.clone(), group); own.push(l.material); l.scale.set(0.5, 0.4, 0.5); l.position.set(s * (e.xo - 0.6), e.hgt + 0.3, e.z); return l; });
     return { update: (T, st) => {
       const wL = e.xo - st.gap / 2;
@@ -338,9 +376,19 @@ export class HazardView {
   // ───────── 드럼통 / 드론 / 바리케이드 ─────────
   make_barrels(e, group, own) {
     const THREE = this.THREE, g = new THREE.Group(), inner = new THREE.Group();
-    const drum = this.mesh(new THREE.CylinderGeometry(e.r, e.r, e.r * 1.7, 10), this.M.drum, inner, true); own.push(drum.geometry);
-    const band = this.mesh(new THREE.CylinderGeometry(e.r * 1.03, e.r * 1.03, 0.12, 10), this.M.steel, inner); own.push(band.geometry);
-    inner.rotation.x = e.ax === 'x' ? Math.PI / 2 : 0; if (e.ax === 'z') inner.rotation.z = Math.PI / 2;
+    if (e.kind === 'donut') {
+      // 굴러오는 대형 도넛 (구 충돌 r 안쪽)
+      const dough = this.mesh(new THREE.TorusGeometry(e.r * 0.62, e.r * 0.36, 8, 18), new THREE.MeshStandardMaterial({ color: 0xd9a05a, roughness: 0.6 }), inner, true);
+      const icing = this.mesh(new THREE.TorusGeometry(e.r * 0.62, e.r * 0.3, 8, 18, Math.PI), new THREE.MeshStandardMaterial({ color: 0xff7ab8, roughness: 0.4 }), inner); icing.position.z = 0.06;
+      own.push(dough.geometry, dough.material, icing.geometry, icing.material);
+    } else if (e.kind === 'cannon') {
+      const ball = this.mesh(this.sphere, new THREE.MeshStandardMaterial({ color: 0x1c1d22, roughness: 0.35, metalness: 0.8 }), inner, true); ball.scale.setScalar(e.r); own.push(ball.material);
+      const fuse = this.mesh(this.unitBox, this.M.amber, inner); fuse.scale.set(0.12, 0.4, 0.12); fuse.position.y = e.r;
+    } else {
+      const drum = this.mesh(new THREE.CylinderGeometry(e.r, e.r, e.r * 1.7, 10), this.M.drum, inner, true); own.push(drum.geometry);
+      const band = this.mesh(new THREE.CylinderGeometry(e.r * 1.03, e.r * 1.03, 0.12, 10), this.M.steel, inner); own.push(band.geometry);
+    }
+    if (e.kind === 'donut') { inner.rotation.y = e.ax === 'x' ? 0 : Math.PI / 2; } else { inner.rotation.x = e.ax === 'x' ? Math.PI / 2 : 0; if (e.ax === 'z') inner.rotation.z = Math.PI / 2; }
     g.add(inner); group.add(g); g.visible = false;
     return { update: (T, st) => {
       if (!st.pos) { g.visible = false; return; }
@@ -351,6 +399,19 @@ export class HazardView {
   }
   make_drone(e, group, own) {
     const THREE = this.THREE, g = new THREE.Group(); group.add(g);
+    if (e.kind === 'balloon') {
+      // 풍선 다발 (충돌 구 r 안에 들어가는 풍선 5개 + 끈)
+      const cols = [0xff4a6a, 0xffd24a, 0x4ad8ff, 0x8aff6a, 0xc07aff];
+      for (let k = 0; k < 5; k++) { const a = k * 1.256, m = new THREE.MeshStandardMaterial({ color: cols[(k + (e.hue | 0)) % 5], roughness: 0.25, metalness: 0.1, emissive: cols[(k + (e.hue | 0)) % 5], emissiveIntensity: 0.25 }); own.push(m); const b = this.mesh(this.sphere, m, g); b.scale.set(0.45, 0.55, 0.45); b.position.set(Math.cos(a) * 0.5, 0.25 + (k % 2) * 0.3, Math.sin(a) * 0.5); }
+      const str = this.mesh(this.unitBox, this.M.rope, g); str.scale.set(0.03, 1.4, 0.03); str.position.y = -0.7;
+      return { update: (T, st) => { g.position.set(st.pos[0], st.pos[1], st.pos[2]); g.rotation.y = T * 0.6; this.audio.push({ k: 'drone', x: st.pos[0], y: st.pos[1], z: st.pos[2], lvl: 0.2 }); } };
+    }
+    if (e.kind === 'ghost') {
+      const body = this.mesh(this.unitCone, this.M.ghost, g); body.scale.set(0.95, 1.9, 0.95); body.position.y = -1.0; body.rotation.x = 0;
+      const head = this.mesh(this.sphere, this.M.ghost, g); head.scale.setScalar(0.75); head.position.y = 0.7;
+      for (const x of [-0.25, 0.25]) { const eye = this.mesh(this.unitBox, this.M.laser, g); eye.scale.set(0.14, 0.18, 0.05); eye.position.set(x, 0.8, 0.7); }
+      return { update: (T, st) => { g.position.set(st.pos[0], st.pos[1], st.pos[2]); g.rotation.y = Math.sin(T * 1.3) * 0.6; head.position.y = 0.7 + Math.sin(T * 4) * 0.08; this.audio.push({ k: 'drone', x: st.pos[0], y: st.pos[1], z: st.pos[2], lvl: 0.3 }); } };
+    }
     const body = this.mesh(this.unitBox, this.M.dark, g, true); body.scale.set(0.9, 0.28, 0.9);
     const rotors = [];
     for (const [x, z] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
@@ -360,6 +421,95 @@ export class HazardView {
     const led = this.mesh(this.unitBox, this.M.laser.clone(), g); own.push(led.material); led.scale.set(0.2, 0.12, 0.2); led.position.y = -0.2;
     const cone = this.mesh(this.unitCone, this.M.headBeam.clone(), g); own.push(cone.material); cone.scale.set(2.4, 5, 2.4); cone.rotation.x = Math.PI; cone.position.y = -5.2; cone.material.opacity = 0.14; cone.material.map = null; cone.material.color = new THREE.Color(0.6, 1.2, 1.6); cone.material.needsUpdate = true;
     return { update: (T, st) => { g.position.set(st.pos[0], st.pos[1], st.pos[2]); rotors.forEach((r, i) => { r.rotation.y = T * 60 + i; }); led.material.opacity = Math.floor(T * 3) % 2 ? 1 : 0.2; this.audio.push({ k: 'drone', x: st.pos[0], y: st.pos[1], z: st.pos[2], lvl: 1 }); } };
+  }
+  // ───────── 놀이기구 ─────────
+  hueMat(h, k = 1, o = {}) { const c = new this.THREE.Color().setHSL(((h % 360) + 360) % 360 / 360, 0.75, 0.55); return new this.THREE.MeshStandardMaterial({ color: c, roughness: 0.4, metalness: 0.3, flatShading: true, ...o }); }
+  make_wheel(e, group, own) {
+    const THREE = this.THREE, rot = new THREE.Group(); rot.position.set(e.cx, e.cy, e.z); group.add(rot);
+    const rimMat = this.hueMat(e.hue || 200); own.push(rimMat);
+    const n = e.n, R = e.R;
+    for (let i = 0; i < n; i++) {
+      const a = i * TAU / n;
+      const sp = this.mesh(this.unitBox, this.M.steel, rot); sp.scale.set(R, 0.22, 0.22); sp.position.set(Math.cos(a) * R / 2, Math.sin(a) * R / 2, 0); sp.rotation.z = a;
+      const am = a + Math.PI / n, cl = R * Math.cos(Math.PI / n), len = 2 * R * Math.sin(Math.PI / n);
+      for (const dz of [-0.35, 0.35]) { const ch = this.mesh(this.unitBox, rimMat, rot, true); ch.scale.set(len + 0.2, 0.32, 0.22); ch.position.set(Math.cos(am) * cl, Math.sin(am) * cl, dz); ch.rotation.z = am + Math.PI / 2; }
+      const lt = this.mesh(this.unitBox, this.M.amber, rot); lt.scale.set(0.35, 0.35, 0.35); lt.position.set(Math.cos(a) * R, Math.sin(a) * R, 0.5);
+    }
+    const hub = this.mesh(this.unitCyl, this.M.gold, rot, true); hub.scale.set(1.4, 1.2, 1.4); hub.rotation.x = Math.PI / 2; hub.position.z = -0.6;
+    const gond = [];
+    for (let i = 0; i < n; i++) {
+      const g = new THREE.Group(); group.add(g);
+      const m = this.hueMat((e.hue || 200) + i * (360 / n)); own.push(m);
+      const body = this.mesh(this.unitBox, m, g, true); body.scale.set(e.gs[0] * 2, e.gs[1] * 2, e.gs[2] * 2);
+      const roof = this.mesh(this.unitCone, m, g); roof.scale.set(e.gs[0] * 1.2, 0.6, e.gs[2] * 1.2); roof.position.y = e.gs[1];
+      const win = this.mesh(this.unitBox, this.M.signp, g); win.scale.set(e.gs[0] * 1.6, e.gs[1] * 0.8, e.gs[2] * 2.05); win.position.y = 0.15;
+      const bar = this.mesh(this.unitBox, this.M.steel, g); bar.scale.set(0.1, 1.1, 0.1); bar.position.y = e.gs[1] + 0.55;
+      gond.push(g);
+    }
+    return { update: (T, st) => {
+      rot.rotation.z = st.ang;
+      st.gond.forEach((p, i) => gond[i].position.set(p[0], p[1], p[2]));
+      this.audio.push({ k: 'drone', x: 0, y: 3, z: e.z, lvl: 0.25 });
+    } };
+  }
+  make_coaster(e, group, own) {
+    const THREE = this.THREE, cars = [], h = e.hue === undefined ? 330 : e.hue;
+    for (let k = 0; k < e.cars; k++) {
+      const g = new THREE.Group(); group.add(g); g.visible = false;
+      const m = this.hueMat(h + k * 18); own.push(m);
+      const body = this.mesh(this.unitBox, m, g, true); body.scale.set(2.5, 1.0, 1.8); body.position.y = -0.2;
+      const nose = this.mesh(this.unitBox, this.M.gold, g); nose.scale.set(0.2, 0.9, 1.7); nose.position.set(1.3 * e.dir, -0.2, 0);
+      for (const dx of [-0.6, 0.6]) { const bar = this.mesh(this.unitBox, this.M.steel, g); bar.scale.set(0.1, 0.6, 1.6); bar.position.set(dx, 0.5, 0); }
+      for (const dx of [-0.6, 0.6]) for (const dz of [-0.45, 0.45]) { const p = this.mesh(this.sphere, this.M.drum, g); p.scale.setScalar(0.22); p.position.set(dx, 0.55, dz); }
+      cars.push(g);
+    }
+    return { update: (T, st) => {
+      cars.forEach((c) => { c.visible = false; });
+      for (const p of st.cars) { const c = cars[p[3]]; if (!c) continue; c.visible = true; c.position.set(p[0], p[1], p[2]); }
+      if (st.cars.length) this.audio.push({ k: 'train', x: st.cars[0][0], y: st.cars[0][1], z: e.z, lvl: 1.4, bell: false });
+    } };
+  }
+  make_swing(e, group, own) {
+    const THREE = this.THREE, piv = new THREE.Group(); piv.position.set(0, e.py, e.z); group.add(piv);
+    const hull = this.hueMat(15, 1); own.push(hull);
+    const ship = new THREE.Group(); ship.position.y = -e.L; piv.add(ship);
+    const b = this.mesh(this.unitBox, hull, ship, true); b.scale.set(e.hw * 2, 1.6, 4.0); b.position.y = -0.4;
+    const keel = this.mesh(this.unitBox, this.M.wood, ship, true); keel.scale.set(e.hw * 1.6, 1.0, 3.2); keel.position.y = -1.1;
+    for (const s of [-1, 1]) { const tip = this.mesh(this.unitBox, this.M.gold, ship); tip.scale.set(0.5, 2.6, 0.5); tip.position.set(s * (e.hw - 0.2), 0.6, 0); }
+    const deck = this.mesh(this.unitBox, this.M.wood, ship); deck.scale.set(e.hw * 1.9, 0.12, 3.6); deck.position.y = 0.42;
+    for (const dz of [-1.6, 1.6]) { const arm = this.mesh(this.unitBox, this.M.steel, piv, true); arm.scale.set(0.3, e.L, 0.3); arm.position.set(0, -e.L / 2, dz); }
+    const sail = this.mesh(this.unitBox, this.M.signp, ship); sail.scale.set(0.12, 2.2, 3.0); sail.position.set(0, 2.0, 0);
+    return { update: (T, st) => {
+      piv.rotation.z = st.th;
+      this.audio.push({ k: 'ball', x: st.pos[0], y: st.pos[1], z: e.z, lvl: 1 });
+    } };
+  }
+  make_carousel(e, group, own) {
+    const THREE = this.THREE, items = [], kind = e.kind || 'horse';
+    for (let i = 0; i < e.n; i++) {
+      const g = new THREE.Group(); group.add(g);
+      const sz = e.size || [0.42, 0.75, 0.42];
+      if (kind === 'cup') {
+        const m = this.hueMat(i * 90 + 20); own.push(m);
+        const cup = this.mesh(this.unitCyl, m, g, true); cup.scale.set(sz[0], sz[1] * 1.6, sz[2]); cup.position.y = -sz[1];
+        const rim = this.mesh(this.unitCyl, this.M.gold, g); rim.scale.set(sz[0] * 1.05, 0.12, sz[2] * 1.05); rim.position.y = sz[1] * 0.6;
+        const handle = this.mesh(this.unitBox, m, g); handle.scale.set(0.2, 0.6, 0.5); handle.position.set(sz[0] + 0.1, 0, 0);
+      } else if (kind === 'chair') {
+        const m = this.hueMat(i * 30); own.push(m);
+        const seat = this.mesh(this.unitBox, m, g, true); seat.scale.set(sz[0] * 2, sz[1] * 1.2, sz[2] * 2);
+        const chain = this.mesh(this.unitBox, this.M.steel, g); chain.scale.set(0.05, 14, 0.05); chain.position.y = 7.2;
+      } else {
+        const m = this.hueMat(i * 47 + 10, 1, { roughness: 0.3 }); own.push(m);
+        const body = this.mesh(this.unitBox, m, g, true); body.scale.set(0.6, 0.7, 1.6);
+        const neck = this.mesh(this.unitBox, m, g); neck.scale.set(0.4, 0.9, 0.4); neck.position.set(0, 0.55, -0.7); neck.rotation.x = 0.4;
+        for (const [dx, dz] of [[-0.2, -0.6], [0.2, -0.6], [-0.2, 0.6], [0.2, 0.6]]) { const leg = this.mesh(this.unitBox, m, g); leg.scale.set(0.12, 0.6, 0.12); leg.position.set(dx, -0.6, dz); }
+        const pole = this.mesh(this.unitBox, this.M.gold, g); pole.scale.set(0.08, 7, 0.08); pole.position.y = 2.6;
+      }
+      items.push(g);
+    }
+    return { update: (T, st) => {
+      st.horses.forEach((p, i) => { const g = items[i]; g.position.set(p[0], p[1], p[2]); g.rotation.y = -p[3] + (kind === 'cup' ? T * 2 : 0); });
+    } };
   }
   make_barricade(e, group, own) {
     const THREE = this.THREE, g = new THREE.Group(); group.add(g);

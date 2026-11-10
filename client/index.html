@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Temu Tesla — 협동 로드스터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Do+Hyeon&display=swap">
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0e1a'/%3E%3Cpath d='M12 22h40v9H36.5v21h-9V31H12z' fill='%2335f0ff'/%3E%3C/svg%3E">
 <script type="importmap">
@@ -13,23 +16,24 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
+<canvas id="menu-gl"></canvas>
 
 <!-- ───────── HUD ───────── -->
 <div id="hud" class="hidden">
   <div id="hud-top" class="panel">
-    <div id="sec-name">구간 1 · 튜토리얼 거리</div>
+    <div id="sec-name">구간 1 · 튜토리얼 골목</div>
     <div id="progress"><div id="prog-fill"></div><div id="prog-ticks"></div><div id="prog-car"></div></div>
     <div id="prog-meta">0 m / 9000 m</div>
   </div>
   <div id="hud-stats" class="panel">
-    <div class="stat"><span>시간</span><b id="st-time">00:00.0</b></div>
-    <div class="stat"><span>사망</span><b id="st-deaths">0</b></div>
+    <div class="stat"><span>TIME</span><b id="st-time">00:00.0</b></div>
+    <div class="stat"><span>DEATHS</span><b id="st-deaths">0</b></div>
     <div class="stat dbg"><span>FPS</span><b id="st-fps">-</b></div>
-    <div class="stat dbg"><span>지연</span><b id="st-ping">-</b></div>
+    <div class="stat dbg"><span>PING</span><b id="st-ping">-</b></div>
   </div>
   <div id="hud-players" class="panel"></div>
   <div id="hud-fuel" class="panel">
-    <div class="lbl">연료 <span id="fuel-note"></span></div>
+    <div class="lbl">FUEL · 연료 <span id="fuel-note"></span></div>
     <div id="fuel-pct">100<small>%</small></div>
     <div id="fuel-bar"><div id="fuel-fill"></div><div id="fuel-mark"></div></div>
   </div>
@@ -58,36 +62,82 @@
   <div id="help-line">Shift+R 또는 Backspace 길게 = 자폭 후 체크포인트 부활 · C 시점 전환 · F11 전체화면 · Esc 설정</div>
 </div>
 
-<!-- ───────── 메뉴 ───────── -->
-<div id="screen-menu" class="screen hidden">
-  <div class="bg-grid"></div>
-  <div class="menu-card panel">
-    <h1><span>TEMU</span> TESLA</h1>
-    <p class="sub">1~4인 온라인 협동 · 로드스터 한 대를 키 8개로 나눠 조종해 도시를 돌파하세요</p>
-    <label class="field">이름<input id="in-name" maxlength="12" placeholder="플레이어" autocomplete="off"></label>
-    <div class="btnrow"><button id="btn-create" class="btn primary">방 만들기</button></div>
-    <div class="or">또는 방 코드로 입장</div>
-    <div class="btnrow join"><input id="in-code" maxlength="4" placeholder="ABCD" autocomplete="off"><button id="btn-join" class="btn">입장</button></div>
-    <div id="menu-msg" class="msg"></div>
-    <div class="btnrow small"><button id="btn-settings" class="btn ghost">설정</button><button id="btn-how" class="btn ghost">조작법</button></div>
-    <div id="how" class="how hidden">
-      <p><b>바퀴</b> Q(좌앞) W(우앞) A(좌뒤) S(우뒤) — 눌린 바퀴만 굴러서 차가 방향을 바꿉니다. 지면에서만 동작, 연료 소모 없음.</p>
-      <p><b>배출구</b> E(좌앞) R(우앞) D(좌뒤) F(우뒤) — 눌린 모서리에서 위로 분사. 기울여서 이동하세요. 연료는 켜진 개수만큼 빨리 닳고, 안 누르면 충전됩니다.</p>
-      <p>1명=8키 전부 · 2명=왼쪽/오른쪽 · 4명=모서리 하나씩. <b>3명은 불가</b>. 지면(도로) 외에 닿으면 폭발!</p>
+<!-- ───────── 메인 로비 (스케치: 왼쪽 위 로고, 왼쪽 메뉴, 오른쪽 활공하는 로드스터) ───────── -->
+<div id="screen-menu" class="screen menu hidden">
+  <div class="menu-shade"></div>
+  <header class="brand">
+    <h1 class="logo"><span>TEMU</span>&nbsp;TESLA</h1>
+    <div class="tagline">CO-OP ROADSTER · 8 KEYS · 1–4 PLAYERS</div>
+  </header>
+  <nav class="main-nav">
+    <div class="nav-row">
+      <button class="nav-item" id="nav-play"><i>01</i><span>플레이</span></button>
+      <div id="play-modes" class="modes hidden">
+        <button class="mode" data-n="1"><b>1P</b><small>솔로 · 8키</small></button>
+        <button class="mode" data-n="2"><b>2P</b><small>좌 / 우</small></button>
+        <button class="mode" data-n="4"><b>4P</b><small>모서리 하나씩</small></button>
+      </div>
     </div>
+    <button class="nav-item" id="nav-garage"><i>02</i><span>차고</span></button>
+    <button class="nav-item" id="nav-settings"><i>03</i><span>설정</span></button>
+    <button class="nav-item" id="nav-how"><i>04</i><span>사용법</span></button>
+  </nav>
+
+  <section id="play-setup" class="setup panel hidden">
+    <div class="setup-head"><div><div class="lbl">PLAY SETUP</div><b id="setup-title">1P · 솔로</b></div><button class="xbtn" id="setup-close" aria-label="닫기">✕</button></div>
+    <label class="field">이름<input id="in-name" maxlength="12" placeholder="플레이어" autocomplete="off"></label>
+    <div class="lbl">맵 선택</div>
+    <div id="map-cards" class="map-cards"></div>
+    <div id="setup-solo" class="btnrow"><button id="btn-solo" class="btn primary wide">출발 ▶</button></div>
+    <div id="setup-multi">
+      <div class="btnrow"><button id="btn-create" class="btn primary wide">방 만들기</button></div>
+      <div class="or">또는 친구의 방 코드로 입장</div>
+      <div class="btnrow join"><input id="in-code" maxlength="4" placeholder="ABCD" autocomplete="off"><button id="btn-join" class="btn">입장</button></div>
+    </div>
+    <div id="menu-msg" class="msg"></div>
+  </section>
+
+  <section id="how" class="how panel hidden">
+    <div class="setup-head"><div><div class="lbl">HOW TO PLAY</div><b>사용법</b></div><button class="xbtn" id="how-close" aria-label="닫기">✕</button></div>
+    <div class="how-grid">
+      <div><h3>바퀴 · Q W A S</h3><p>좌앞 · 우앞 · 좌뒤 · 우뒤. 눌린 바퀴만 굴러서 차가 반대쪽으로 돕니다. 지면에서만 동작하고 연료를 쓰지 않아요.</p></div>
+      <div><h3>배출구 · E R D F</h3><p>눌린 모서리에서 위로 분사합니다. 기울여서 앞으로 날아가세요. 4개를 모두 켜면 약 2.5초 만에 연료가 바닥나요.</p></div>
+      <div><h3>연료</h3><p>배출구를 안 누르면 충전됩니다 (지면 초당 8%, 공중 4%). 초록 충전 구역에는 장애물이 없어요.</p></div>
+      <div><h3>인원</h3><p>1P = 8키 전부 · 2P = 왼쪽/오른쪽 · 4P = 모서리 하나씩. 도로 말고 무엇이든 닿으면 폭발!</p></div>
+      <div><h3>기타</h3><p>Shift+R / Backspace 길게 = 자폭 부활 · C = 시점 전환 · Esc = 설정</p></div>
+      <div><h3>맵</h3><p>도시 9km (10구간) · 놀이공원 6.3km (7구역). 구간마다 풍경과 장애물이 달라집니다.</p></div>
+    </div>
+  </section>
+  <footer class="menu-foot">TEMU MOTORS · ROADSTER R1</footer>
+</div>
+
+<!-- ───────── 차고 ───────── -->
+<div id="screen-garage" class="screen garage hidden">
+  <div class="garage-panel panel">
+    <div class="lbl">GARAGE</div>
+    <h2 class="garage-title">차고</h2>
+    <div class="car-list">
+      <button class="car-slot on"><b>TEMU 로드스터</b><small>R1 · 기본 차량</small></button>
+      <button class="car-slot locked" disabled><b>???</b><small>준비 중</small></button>
+      <button class="car-slot locked" disabled><b>???</b><small>준비 중</small></button>
+    </div>
+    <div id="car-stats" class="stats"></div>
+    <div class="garage-foot"><button id="garage-back" class="btn">◀ 로비로</button><span class="hint-drag">마우스로 끌어서 돌려 보기</span></div>
   </div>
 </div>
 
-<!-- ───────── 로비 ───────── -->
-<div id="screen-lobby" class="screen hidden">
+<!-- ───────── 방 대기실 ───────── -->
+<div id="screen-lobby" class="screen room hidden">
   <div class="bg-grid"></div>
   <div class="lobby-card panel">
-    <div class="lobby-head"><div><div class="lbl">방 코드</div><div id="lobby-code">----</div></div><button id="btn-copy" class="btn ghost">코드 복사</button></div>
+    <div class="lobby-head"><div><div class="lbl">ROOM CODE · 방 코드</div><div id="lobby-code">----</div></div><div class="lobby-meta"><span id="lobby-size" class="pill">2P</span><button id="btn-copy" class="btn ghost">코드 복사</button></div></div>
+    <div class="lbl">맵</div>
+    <div id="lobby-maps" class="map-cards small"></div>
     <div id="lobby-players"></div>
     <div id="lobby-layout" class="layout"></div>
     <div id="lobby-warn" class="msg warn"></div>
     <div class="btnrow"><button id="btn-ready" class="btn">준비 완료</button><button id="btn-start" class="btn primary" disabled>게임 시작</button><button id="btn-leave" class="btn ghost">나가기</button></div>
-    <div class="note">친구에게 방 코드를 알려 주세요. 인원은 1, 2, 4명만 시작할 수 있어요. 방장만 시작할 수 있습니다.</div>
+    <div class="note">친구에게 방 코드를 알려 주세요. 방장만 시작하고 맵을 바꿀 수 있어요.</div>
   </div>
 </div>
 
@@ -95,7 +145,7 @@
 <div id="overlay-wake" class="overlay"><div class="wake panel"><div class="spinner"></div><h2>서버를 깨우는 중…</h2><p id="wake-msg">무료 서버는 잠들어 있다가 처음 접속하면 30~60초쯤 걸릴 수 있어요.</p></div></div>
 <div id="overlay-mobile" class="overlay hidden"><div class="wake panel"><h2>키보드가 필요한 게임입니다</h2><p>이 게임은 Q W A S E R D F 키로 조종합니다.<br>키보드가 있는 PC 브라우저에서 접속해 주세요.</p></div></div>
 <div id="overlay-pause" class="overlay hidden"><div class="wake panel"><h2>일시정지</h2><p id="pause-msg"></p><div id="pause-count">30</div></div></div>
-<div id="overlay-result" class="overlay hidden"><div class="wake panel result"><h2>도착!</h2><div class="res-grid"><div><span>총 시간</span><b id="res-time">00:00.0</b></div><div><span>사망 횟수</span><b id="res-deaths">0</b></div></div><p id="res-names"></p><div class="btnrow"><button id="btn-again" class="btn primary">다시 하기</button><button id="btn-quit" class="btn ghost">나가기</button></div></div></div>
+<div id="overlay-result" class="overlay hidden"><div class="wake panel result"><h2>FINISH · 도착!</h2><div class="res-grid"><div><span>총 시간</span><b id="res-time">00:00.0</b></div><div><span>사망 횟수</span><b id="res-deaths">0</b></div></div><p id="res-names"></p><div class="btnrow center"><button id="btn-again" class="btn primary">다시 하기</button><button id="btn-quit" class="btn ghost">나가기</button></div></div></div>
 <div id="modal-settings" class="overlay hidden"><div class="wake panel settings">
   <h2>설정</h2>
   <label class="row">카메라 시점 (게임 중 C 키)<select id="set-cam"><option value="chase" selected>추격 (그란 투리스모식)</option><option value="top">탑뷰</option></select></label>

@@ -87,7 +87,39 @@ function facadeTextures(THREE, aniso) {
     if (sp.mode === 'neon') { g.fillStyle = '#35f0ff'; for (let i = 0; i < N; i += 2) g.fillRect(i * cell + cell - 3, 0, 3, S); ge.fillStyle = '#35f0ff'; for (let i = 0; i < N; i += 2) ge.fillRect(i * cell + cell - 3, 0, 3, S); }
     out.push({ map: tex(THREE, c, { aniso }), emissive: tex(THREE, e, { aniso }) });
   });
+  out.push(circusFacade(THREE, aniso), castleFacade(THREE, aniso));
   return out;
+}
+
+// 놀이공원 파빌리온: 창문 격자 없이 세로 줄무늬 + 아치 장식 + 전구 (색은 정점색으로 입힌다)
+function circusFacade(THREE, aniso) {
+  const S = 512, c = cv(S, S), g = c.getContext('2d'), e = cv(S, S), ge = e.getContext('2d');
+  ge.fillStyle = '#000'; ge.fillRect(0, 0, S, S);
+  for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#f4efe6' : '#bfb6aa'; g.fillRect(i * 64, 0, 64, S); }
+  for (let row = 0; row < 2; row++) {
+    const y0 = row * 256;
+    g.fillStyle = '#8a7d6e'; g.fillRect(0, y0 + 236, S, 20);
+    for (let k = 0; k < 4; k++) {
+      const cx = k * 128 + 64;
+      g.fillStyle = '#3a3440'; g.beginPath(); g.moveTo(cx - 34, y0 + 220); g.lineTo(cx - 34, y0 + 120); g.arc(cx, y0 + 120, 34, Math.PI, 0); g.lineTo(cx + 34, y0 + 220); g.fill();
+      g.strokeStyle = '#e8c070'; g.lineWidth = 5; g.stroke();
+      ge.fillStyle = '#ffd88a'; ge.globalAlpha = 0.35; ge.fillRect(cx - 30, y0 + 140, 60, 78); ge.globalAlpha = 1;
+      for (let a = 0; a <= 12; a++) { const t = Math.PI + a * Math.PI / 12, px = cx + Math.cos(t) * 42, py = y0 + 120 + Math.sin(t) * 42; ge.fillStyle = a % 2 ? '#ffe9a0' : '#ff8ad8'; ge.beginPath(); ge.arc(px, py, 3.5, 0, 7); ge.fill(); g.fillStyle = '#fff6c8'; g.beginPath(); g.arc(px, py, 3.5, 0, 7); g.fill(); }
+    }
+    for (let x = 8; x < S; x += 16) { ge.fillStyle = (x / 16) % 3 < 1 ? '#ffe9a0' : (x / 16) % 3 < 2 ? '#7ae8ff' : '#ff8ad8'; ge.beginPath(); ge.arc(x, y0 + 30, 3, 0, 7); ge.fill(); g.fillStyle = '#fffbe0'; g.beginPath(); g.arc(x, y0 + 30, 3, 0, 7); g.fill(); }
+  }
+  return { map: tex(THREE, c, { aniso }), emissive: tex(THREE, e, { aniso }) };
+}
+// 성벽: 돌 블록 + 드문 화살창(불빛)
+function castleFacade(THREE, aniso) {
+  const S = 512, c = cv(S, S), g = c.getContext('2d'), e = cv(S, S), ge = e.getContext('2d'), rng = makeRng(404);
+  g.fillStyle = '#7d766c'; g.fillRect(0, 0, S, S); ge.fillStyle = '#000'; ge.fillRect(0, 0, S, S);
+  for (let y = 0; y < S; y += 32) for (let x = (y / 32) % 2 ? -32 : 0; x < S; x += 64) {
+    const v = 100 + rng() * 40 | 0; g.fillStyle = `rgb(${v + 10},${v + 4},${v - 6})`; g.fillRect(x + 2, y + 2, 60, 28);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x + 2, y + 24, 60, 6);
+  }
+  for (let k = 0; k < 6; k++) { const x = 40 + (k % 3) * 170 + rng() * 20, y = 60 + Math.floor(k / 3) * 256 + rng() * 40; g.fillStyle = '#1a1612'; g.fillRect(x, y, 14, 60); g.beginPath(); g.arc(x + 7, y, 7, Math.PI, 0); g.fill(); if (rng() < 0.6) { ge.fillStyle = '#ffb860'; ge.fillRect(x + 2, y, 10, 58); } }
+  return { map: tex(THREE, c, { aniso }), emissive: tex(THREE, e, { aniso }) };
 }
 
 function stripeTexture(THREE, aniso) {

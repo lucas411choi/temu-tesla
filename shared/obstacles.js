@@ -132,7 +132,7 @@ function ceil(e, T, out, st) {
   else if (u < t2) { const f = (u - t1) / e.drop; yb = e.yHigh + (e.yLow - e.yHigh) * f * f; }
   else if (u < t3) yb = e.yLow;
   else if (u < t4) yb = e.yLow + (e.yHigh - e.yLow) * smoothstep(0, 1, (u - t3) / e.rise);
-  const hy = (e.yTop - yb) / 2;
+  const top = e.h ? yb + e.h : e.yTop, hy = (top - yb) / 2;      // h 가 있으면 두께가 일정한 '내려오는 좌석'(자이로드롭)
   emit(out, st, makeBox((e.x0 + e.x1) / 2, yb + hy, e.z, (e.x1 - e.x0) / 2, hy, e.d / 2), true);
   if (st) { st.yb = yb; st.warn = warn; }
 }
@@ -236,7 +236,66 @@ function barricade(e, T, out, st) {
   if (st) st.pos = [x, e.h / 2, e.z];
 }
 
-const EVAL = { birds, laser, column, rain, traffic, ceil, saw, ball, debris, press, train, barrels, drone, barricade };
+// ───────── 대관람차 (도로를 가로지르는 x-y 평면 바퀴) ─────────
+// 바큇살(spoke) + 테두리 현(chord) + 매달린 곤돌라. 곤돌라는 항상 아래로 매달려 있다.
+function wheel(e, T, out, st) {
+  const a0 = e.ph + e.w * T, n = e.n, R = e.R, gs = e.gs;
+  if (st) { st.ang = a0; st.gond = []; }
+  for (let i = 0; i < n; i++) {
+    const a = a0 + i * TAU / n, ca = Math.cos(a), sa = Math.sin(a);
+    const rx = e.cx + R * ca, ry = e.cy + R * sa;
+    // 바큇살: 중심~테두리 (z축 회전)
+    emit(out, st, makeBox(e.cx + ca * R / 2, e.cy + sa * R / 2, e.z, R / 2, 0.14, 0.14, 0, rotZ(a)), true);
+    // 테두리 현
+    const a2 = a + TAU / n, mx = e.cx + R * Math.cos(a + Math.PI / n) * Math.cos(Math.PI / n), my = e.cy + R * Math.sin(a + Math.PI / n) * Math.cos(Math.PI / n);
+    emit(out, st, makeBox(mx, my, e.z, R * Math.sin(Math.PI / n), 0.16, 0.16, 0, rotZ(a + Math.PI / n + Math.PI / 2)), true);
+    // 곤돌라 (테두리 점 아래로 매달림)
+    const gy = ry - 1.1 - gs[1];
+    emit(out, st, makeBox(rx, gy, e.z, gs[0], gs[1], gs[2]), true);
+    if (st) st.gond.push([rx, gy, e.z, ry]);
+    void a2;
+  }
+}
+
+// ───────── 롤러코스터 열차 (도로를 x 방향으로 가로지름, 가운데에서 dip 만큼 낮아짐) ─────────
+export function coasterY(e, x) { const span = e.len / 2; return e.y - (e.dip || 0) * Math.max(0, Math.cos(Math.PI * Math.min(1, Math.abs(x) / span) / 2)); }
+function coaster(e, T, out, st) {
+  const u = mod(T + e.ph, e.P), X = e.len / 2, gap = 0.5, carL = 2.6, n = e.cars, total = n * (carL + gap);
+  const head = -X + e.v * u;
+  if (st) st.cars = [];
+  if (head - total > X) return;
+  for (let k = 0; k < n; k++) {
+    const xk = head - k * (carL + gap) - carL / 2;
+    if (xk < -X - carL || xk > X + carL) continue;
+    const x = e.dir > 0 ? xk : -xk, y = coasterY(e, x) + 0.75;
+    emit(out, st, makeBox(x, y, e.z, carL / 2, 0.75, 0.95), true);
+    if (st) st.cars.push([x, y, e.z, k]);
+  }
+}
+
+// ───────── 바이킹(해적선) : z축 진자. 배 = 진자 끝의 긴 상자 ─────────
+function swing(e, T, out, st) {
+  const th = e.amp * Math.sin(TAU * (T + e.ph) / e.per);
+  const bx = e.L * Math.sin(th), by = e.py - e.L * Math.cos(th);
+  emit(out, st, makeBox(bx, by, e.z, e.hw, 1.3, 2.1, 0, rotZ(th)), true);
+  // 팔 2개 (배 앞뒤)
+  for (const dz of [-1.6, 1.6]) emit(out, st, makeBox(bx / 2, e.py - e.L / 2 * Math.cos(th), e.z + dz, 0.16, e.L / 2, 0.16, 0, rotZ(th)), true);
+  if (st) { st.th = th; st.pos = [bx, by, e.z]; }
+}
+
+// ───────── 회전목마: x-z 평면에서 도는 목마들 (위아래로 들썩) ─────────
+function carousel(e, T, out, st) {
+  if (st) st.horses = [];
+  const a0 = e.ph + e.w * T, sz = e.size || [0.42, 0.75, 0.42];
+  for (let i = 0; i < e.n; i++) {
+    const a = a0 + i * TAU / e.n, x = e.cx + e.R * Math.cos(a), z = e.z + e.R * Math.sin(a);
+    const y = e.y + e.bob * 0.5 * (1 + Math.sin(T * 2.2 + i * 1.7));
+    emit(out, st, makeBox(x, y, z, sz[0], sz[1], sz[2], 0, rotY(-a)), true);
+    if (st) st.horses.push([x, y, z, a]);
+  }
+}
+
+const EVAL = { birds, laser, column, rain, traffic, ceil, saw, ball, debris, press, train, barrels, drone, barricade, wheel, coaster, swing, carousel };
 export const DYN_TYPES = Object.keys(EVAL);
 
 export function evalEntity(e, T, out, st) { EVAL[e.type](e, T, out, st); }

@@ -36,7 +36,7 @@ export class Net {
   call(ev, data) { return new Promise((res) => this.socket.emit(ev, data, res)); }
   save(code, token) { this.session = { code, token }; try { sessionStorage.setItem('tt-session', JSON.stringify(this.session)); } catch (e) { /* ignore */ } }
   clear() { this.session = null; try { sessionStorage.removeItem('tt-session'); } catch (e) { /* ignore */ } }
-  async create(name, debug) { const r = await this.call('room:create', { name, debug }); if (r.ok) this.save(r.code, r.token); return r; }
+  async create(name, debug, size, map) { const r = await this.call('room:create', { name, debug, size, map }); if (r.ok) this.save(r.code, r.token); return r; }
   async join(code, name) { const r = await this.call('room:join', { code, name }); if (r.ok) this.save(r.code, r.token); return r; }
   async rejoin() { if (!this.session) return { ok: false }; const r = await this.call('room:rejoin', this.session); if (!r.ok) this.clear(); else this.fire('rejoined', r); return r; }
   send(ev, d) { if (this.socket) this.socket.emit(ev, d); }

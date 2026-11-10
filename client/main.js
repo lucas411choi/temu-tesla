@@ -10,17 +10,18 @@ import { HazardView } from './render/hazards.js';
 import { CarView } from './render/car.js';
 import { Effects } from './render/fx.js';
 import { DebugTools } from './debug.js';
+import { MenuScene } from './render/menu3d.js';
 import { getMap } from '../shared/mapData.js';
 import { createWorld } from '../shared/world.js';
 import { CFG } from '../shared/config.js';
 
 const DEBUG = new URLSearchParams(location.search).has('debug');
-const CAUSE = { wall: '장벽', spike: '가시', car: '차량', 'fire-car': '불타는 차', building: '건물 벽', laser: '레이저', column: '불/증기', rain: '불 비', traffic: '달려오는 차', birds: '새 떼', ceil: '천장 가시판', ceiling: '낮은 천장', saw: '톱날', ball: '철구', debris: '낙하물', press: '압착 벽', train: '열차', barrels: '드럼통', drone: '드론', barricade: '바리케이드', wire: '전선', pole: '가로등', lamp: '가로등', tree: '가로수', gantry: '신호등', pipe: '배관', cable: '케이블', rail: '난간', prop: '구조물', fall: '추락', suicide: '자폭', ledge: '절벽', laserfix: '레이저' };
+const CAUSE = { wall: '장벽', spike: '가시', car: '차량', 'fire-car': '불타는 차', building: '건물/구조물', laser: '레이저', column: '불/증기/분수', rain: '낙하물', traffic: '달려오는 차', birds: '새 떼', ceil: '내려오는 판', ceiling: '낮은 천장', saw: '톱날', ball: '흔들리는 추', debris: '낙하물', press: '압착 벽', train: '열차', barrels: '굴러오는 물체', drone: '드론/풍선/유령', barricade: '바리케이드', wire: '전선', pole: '전봇대', lamp: '가로등', tree: '나무', gantry: '신호등/표지판', pipe: '배관', cable: '케이블', rail: '난간', prop: '구조물', fall: '추락', suicide: '자폭', ledge: '절벽', laserfix: '레이저', overpass: '육교', banner: '전광판', skybridge: '연결 통로', laundry: '빨랫줄', lantern: '등불줄', bunting: '깃발줄', crane: '크레인', pylon: '송전탑', conveyor: '컨베이어', tower: '주탑', rock: '바위', gate: '정문', tank: '저장 탱크', stack: '굴뚝', pillar: '기둥', wheel: '대관람차', coaster: '롤러코스터', swing: '바이킹', carousel: '회전목마', cup: '찻잔', booth: '매표소', planter: '화단', swinger: '회전 그네', track: '코스터 선로', droptower: '자이로드롭', bench: '벤치', fountain: '분수', container: '컨테이너' };
 
 const net = new Net(), interp = new Interp(), audio = new GameAudio();
-let ui, input, engine, fx, carView, city, hazards, debug, map, world, init = null;
+let ui, input, engine, fx, carView, city, hazards, debug, map, world, init = null, menu3d = null;
 let running = false, paused = false, rafId = 0, lastT = 0, firstFrame = true, screenName = 'none', inGame = false;
-let suicideStart = 0, goTimer = 0, pingMs = 0, lastStateObj = null;
+let suicideStart = 0, goTimer = 0, pingMs = 0, lastStateObj = null, soloStarting = false, roomSize = null;
 const canvas = document.getElementById('gl');
 
 const isMobile = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)) || (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches);
@@ -29,17 +30,36 @@ const pop = (n) => ((n & 1) + ((n >> 1) & 1) + ((n >> 2) & 1) + ((n >> 3) & 1));
 // ───────── UI 핸들러 ─────────
 const handlers = {
   unlock: () => audio.unlock(),
-  async create(name) { const r = await net.create(name, DEBUG); if (!r.ok) ui.menuMsg(r.err); else { ui.menuMsg(''); goScreen('lobby'); } },
-  async join(code, name) { const r = await net.join(code, name); if (!r.ok) ui.menuMsg(r.err); else { ui.menuMsg(''); goScreen('lobby'); } },
+  async create(name, size, mapId) { roomSize = size; const r = await net.create(name, DEBUG, size, mapId); if (!r.ok) ui.menuMsg(r.err); else { ui.menuMsg(''); goScreen('lobby'); } },
+  async join(code, name) { roomSize = null; const r = await net.join(code, name); if (!r.ok) ui.menuMsg(r.err); else { ui.menuMsg(''); goScreen('lobby'); } },
+  // 1P: 방을 만들고 바로 출발 (대기실을 거치지 않음)
+  async solo(name, mapId) {
+    soloStarting = true; roomSize = 1; ui.wake(true, '게임을 준비하는 중…');
+    const r = await net.create(name, DEBUG, 1, mapId);
+    if (!r.ok) { soloStarting = false; ui.wake(false); return ui.menuMsg(r.err); }
+    const s = await net.call('room:start');
+    if (!s.ok) { soloStarting = false; ui.wake(false); goScreen('lobby'); ui.lobbyMsg(s.err); }
+  },
+  setMap: (id) => net.send('room:map', { map: id }),
+  garage(on) { goScreen(on ? 'garage' : 'menu'); },
   ready: (v) => net.send('room:ready', { ready: v }),
   async start() { const r = await net.call('room:start'); if (!r.ok) ui.lobbyMsg(r.err); },
-  leave() { net.send('room:leave'); net.clear(); stopGame(); goScreen('menu'); },
-  again() { ui.hideOverlays(); net.send('room:again'); },
+  leave() { net.send('room:leave'); net.clear(); stopGame(); roomSize = null; goScreen('menu'); },
+  async again() {
+    ui.hideOverlays(); net.send('room:again');
+    if (roomSize === 1) { soloStarting = true; const s = await net.call('room:start'); if (!s.ok) soloStarting = false; }
+  },
   quality: (q) => { if (engine) engine.setQuality(q); },
   auto: () => {}, camera: (m) => { ui.settings.camera = m; ui.save(); if (engine) engine.setCamMode(m); ui.toast(m === 'chase' ? '시점: 추격(그란 투리스모식)' : '시점: 탑뷰', false); ui.syncCamera(); }, volume: (v) => audio.setVolume(v), mute: (m) => audio.setMuted(m),
   settingsOpen: (on) => { if (input) input.enable(!on && inGame); },
 };
-function goScreen(n) { screenName = n; ui.screen(n); }
+function goScreen(n) {
+  screenName = n; ui.screen(n);
+  // 로비/차고에서는 3D 메뉴 장면을 돌리고, 그 밖에서는 멈춘다
+  if (n === 'menu' || n === 'garage') {
+    try { if (!menu3d) menu3d = new MenuScene(document.getElementById('menu-gl')); menu3d.start(); menu3d.setMode(n === 'garage' ? 'garage' : 'lobby'); } catch (e) { console.warn('메뉴 3D 장면을 시작하지 못함:', e); }
+  } else if (menu3d) menu3d.stop();
+}
 
 function stopGame() {
   running = false; inGame = false; paused = false;
@@ -57,16 +77,23 @@ async function ensureEngine() {
   fx = new Effects(THREE, engine.scene, engine.quality, engine.mats);
   carView = new CarView(THREE, engine.scene, engine.mats, engine.tex, fx);
   fx.setFragments(carView.fragments(), carView.wheelData);
-  map = getMap('city'); world = createWorld(map);
+}
+// 맵이 바뀌면 도시 뷰/장애물 뷰/월드를 새로 만든다
+function ensureMap(id) {
+  if (map && map.id === id) return;
+  if (city) city.dispose();
+  if (hazards) hazards.dispose();
+  map = getMap(id); world = createWorld(map);
+  engine.setEnvKeys(map.env);
   city = new CityView(THREE, engine.scene, map, engine.mats, engine.tex);
   hazards = new HazardView(THREE, engine.scene, map, engine.mats, engine.tex, fx);
-  if (DEBUG) debug = new DebugTools({ net, engine, world, map, getState: () => lastStateObj });
+  if (DEBUG) { if (!debug) debug = new DebugTools({ net, engine, world, map, getState: () => lastStateObj }); else { debug.world = world; debug.map = map; debug.build(); } }
 }
 
 async function startGame(data) {
-  init = data;
+  init = data; soloStarting = false;
   ui.hideOverlays(); ui.wake(true, '게임을 불러오는 중…');
-  try { await ensureEngine(); } catch (e) { ui.wake(false); ui.showError('그래픽을 시작하지 못했습니다: ' + (e && e.message)); return; }
+  try { await ensureEngine(); ensureMap(data.map || 'city'); } catch (e) { ui.wake(false); ui.showError('그래픽을 시작하지 못했습니다: ' + (e && e.message)); return; }
   hazards.clear(); fx.clearAll(); interp.reset();
   input.setAllowed(data.assign[data.slot]); input.enable(true);
   ui.initHud(data, map);
@@ -93,7 +120,7 @@ function handleEvent(e) {
 
 function bindNet() {
   window.addEventListener('keydown', (e) => { if (e.code === 'KeyC' && inGame && !e.repeat && !/INPUT|SELECT|TEXTAREA/.test((e.target && e.target.tagName) || '')) { handlers.camera(engine && engine.camMode === 'chase' ? 'top' : 'chase'); } });
-  net.on('room:state', (st) => { ui.setLobby(st); if (!inGame && screenName !== 'lobby') goScreen('lobby'); });
+  net.on('room:state', (st) => { ui.setLobby(st); if (st.size) roomSize = st.size; if (!inGame && !soloStarting && screenName !== 'lobby') goScreen('lobby'); });
   net.on('game:init', (d) => { startGame(d); });
   net.on('snap', (s) => { interp.push(s, performance.now() / 1000); });
   net.on('evt', (list) => list.forEach(handleEvent));
@@ -119,7 +146,8 @@ function frame(nowMs) {
   let gy = world.groundY(st.p[0], st.p[2]); if (!Number.isFinite(gy)) gy = world.refY(st.p[2]);
   const alt = Math.max(0, st.p[1] - world.refY(st.p[2]));
   const slow = fx.slowmo > 0 ? 0.25 : 1;
-  const secIdx = (map.sections.find((s) => sCar >= s.s0 && sCar < s.s1) || map.sections[map.sections.length - 1]).idx;
+  const sec = map.sections.find((s) => sCar >= s.s0 && sCar < s.s1) || map.sections[map.sections.length - 1], secIdx = sec.idx;
+  const ceilY = world.ceilAt(sCar), indoor = ceilY > 0 && (sec.theme.style === 'tunnel' || sec.theme.style === 'haunt');
 
   engine.applyEnv(sCar);
   city.update(sCar, firstFrame);
@@ -132,7 +160,7 @@ function frame(nowMs) {
   for (const f of city.fires) if (Math.abs(f[2] - st.p[2]) < 70 && Math.random() < 0.6) fx.flame([f[0], f[1] - 0.2, f[2]], 1.0, 2.2);
   for (const sp of city.sparks) if (Math.abs(sp[2] - st.p[2]) < 60 && Math.random() < 0.04) fx.spark([sp[3] + Math.random() * (sp[4] - sp[3]), sp[1], sp[2]], 3, 4);
   fx.update(paused ? 0 : dt * slow);
-  engine.updateCamera(dt, { p: st.p, v: st.v, q: st.q, alt }, fx, { wall: world.wallHalf(st.p[2]), ceil: secIdx === 8 ? 7.5 : 0, ground: gy });
+  engine.updateCamera(dt, { p: st.p, v: st.v, q: st.q, alt }, fx, { wall: world.wallHalf(st.p[2]), ceil: ceilY, ground: gy });
   engine.updateLamps(city.lamps, { x: st.p[0], z: st.p[2] });
   engine.flashLight.position.set(fx.flashPos[0], fx.flashPos[1] + 3, fx.flashPos[2]); engine.flashLight.intensity = fx.flash * 9000;
   if (debug) debug.update(dt, st, st.T);
@@ -146,8 +174,8 @@ function frame(nowMs) {
   if (goTimer > 0) { goTimer -= dt; if (goTimer <= 0) ui.centerMsg(''); } else ui.centerMsg(st.cd > 0 ? String(st.cd) : '');
   if (st.cd > 0 && st.cd !== frame.lastCd) { frame.lastCd = st.cd; audio.tick(); }
   ui.setSuicide(input.suicide && alive ? (now - suicideStart) / CFG.RULES.suicideHold : 0);
-  audio.tension = secIdx / 10;
-  audio.update({ ex: st.ex | localEx, wheels: pop(input.mask & 15), speed: Math.hypot(st.v[0], st.v[2]), grounded: st.g === 1, fuel: st.f, alive, car: st.p, hz: hazards.audio, rain: engine.envNow.rain, tunnel: secIdx === 8, now });
+  audio.tension = secIdx / map.sections.length;
+  audio.update({ ex: st.ex | localEx, wheels: pop(input.mask & 15), speed: Math.hypot(st.v[0], st.v[2]), grounded: st.g === 1, fuel: st.f, alive, car: st.p, hz: hazards.audio, rain: engine.envNow.rain, tunnel: indoor, now });
   firstFrame = false;
 }
 

@@ -1,10 +1,12 @@
-// 구간 8~10 콘텐츠: 지하 터널 / 마천루 협곡 / 피날레
+// 구간 8~10 콘텐츠: 지하 터널 / 마천루 협곡(스카이브리지) / 새벽 해안 피날레(축제 깃발줄)
+import { tunnelPortals, canyonScene, waterfrontScene } from './scenery.js';
 const mid = (b) => (b[0] + b[1]) / 2;
 
 // ───────── 구간 8: 지하 터널 (좁고 낮음, 마주 오는 차, 프레스) ─────────
 export function sec8(B, bk) {
-  B.street(6100, 7000, { style: 'tunnel', lamps: false, trees: false, buildings: false, intersections: [] });
+  // 천장은 입구부터 출구까지 끊김 없이 이어진다 (렌더러가 300m 청크마다 잘라서 그린다)
   B.ceiling(6100, 7000, 7.5, { overPads: true, style: 'tunnel' });
+  tunnelPortals(B, 6100, 7000, 7.5);
   // b0: 고속 마주 오는 차 + 역주행 택시
   B.traffic(bk[0][1] - 5, { x: -2, v: 18, len: 58, P: 8, ph: 0, vk: 'sedan' });
   B.traffic(bk[0][1] - 5, { x: -6, v: 20, len: 58, P: 8, ph: 3.5, vk: 'police', siren: true });
@@ -37,39 +39,50 @@ export function sec8(B, bk) {
   B.hop(bk[7][0] + 14, 1.2, { wire: 3.2, style: 'pipe', label: '터널 마지막 장벽 1.2m' });
 }
 
-// ───────── 구간 9: 마천루 협곡 (수직 상승 + 정밀 비행) ─────────
+// ───────── 구간 9: 마천루 협곡 (수직 상승 + 정밀 비행 + 스카이브리지) ─────────
 export function sec9(B, bk) {
-  B.street(7000, 8000, { style: 'canyon', hmin: 90, hmax: 240, neon: 0.5, lamps: true, trees: false, intersections: [] });
+  canyonScene(B, 7000, 8000);
+  B.street(7000, 8000, { lamps: true, trees: false, intersections: [] });
   B.portal(bk[0][0] + 40, 12, 18, { label: '고층 창문 12~18m', v0: 8 });
+  // b1: 떨어지는 간판 + 스카이브리지 2단
   B.debris(mid(bk[1]), { kind: 'sign', size: [2.6, 0.9, 0.35], y0: 40, xr: 20, zs: 10, P: 4.6, n: 2 });
+  B.skybridge(bk[1][0] + 6, 13, 4); B.skybridge(bk[1][0] + 7, 25, 4); B.skybridge(bk[1][0] + 6, 36, 4);
   B.drone(bk[2][0] + 18, { cy: 5, ax: 9, ay: 1.5, az: 6, per: 8 });
   B.portal(bk[2][0] + 46, 20, 26, { label: '고층 창문 20~26m', v0: 8 });
   B.stepFlight(bk[3][0] + 6, 36, 8, { label: '고층 발코니 8m 올라타기', v0: 8 });
+  B.skybridge(bk[3][1] - 8, 20, 4); B.skybridge(bk[3][1] - 7, 32, 4);
   B.portal(bk[4][0] + 14, 8, 14, { label: '창문 8~14m', v0: 8 });
-  B.portal(bk[4][0] + 56, 16, 22, { label: '창문 16~22m', v0: 8 });
+  B.skybridge(bk[4][0] + 58, 15, 4); B.skybridge(bk[4][0] + 59, 27, 4); B.skybridge(bk[4][0] + 58, 37, 3.5);
   B.laserGrid(mid(bk[5]), { H: 40, gw: 12, gh: 3.6, cx: 0, ax: 0, cy: 6, ay: 8, per: 7, per2: 7, phy: 0 });
   B.drone(bk[6][0] + 20, { cy: 6, ax: 9, ay: 2, az: 6, per: 9, ph: 1 });
-  B.portal(bk[6][0] + 50, 28, 34, { label: '최고층 창문 28~34m', v0: 8 });
+  B.portal(bk[6][0] + 50, 22, 28, { label: '최고층 창문 22~28m', v0: 8 });
   B.stepFlight(bk[7][0] + 6, 40, 12, { label: '옥상 정원 12m 올라타기', v0: 8 });
 }
 
-// ───────── 구간 10: 피날레 (모든 장애물이 섞인 최종 관문) ─────────
+// ───────── 구간 10: 새벽 해안 피날레 (모든 장애물이 섞인 최종 관문 + 축제 깃발줄) ─────────
+const FLAGS = [9, 14, 19, 24, 29, 34, 39];
 export function sec10(B, bk) {
-  B.street(8000, 9000, { style: 'dawn', hmin: 60, hmax: 200, neon: 0.2, trees: true, billboards: true, billEvery: 90, intersections: [] });
-  B.gapFlight(bk[0][0] + 8, 52, { label: '피날레 틈 52m', v0: 9 });
+  waterfrontScene(B, 8000, 9000);
+  B.add('canyongate', { s: 8000 });
+  B.box(8000, 0, 47, 17.8, 2, 0.8, 'gate');
+  B.street(8000, 9000, { trees: false, billboards: true, billEvery: 110, lampEvery: 36, intersections: [], billTexts: ['RESORT', 'SUNRISE', 'TEMU', 'FINISH ▶', 'BEACH'] });
+  B.gapFlight(bk[0][0] + 10, 36, { label: '피날레 틈 36m', v0: 9, style: 'pier' });
   B.drone(bk[0][0] + 70, { cy: 5, ax: 9, ay: 1.6, az: 5, per: 8, ph: 0.5 });
   [10, 26, 42].forEach((d, i) => B.laserTrip(bk[1][0] + d, { ys: [0.55, 1.45], blink: { P: 3.2, on: 1.4, warn: 0.8, ph: -i * 1.6 } }));
+  B.lines(bk[1][0] + 52, FLAGS, { kind: 'bunting' });
   B.vents(bk[2][0] + 12, { n: 6, x0: -7.5, dx: 3, phStep: 0.6, P: 4.2, on: 1.1, warn: 1.0, w: 2.0 });
   B.fireRain(bk[2][0] + 28, bk[2][0] + 46, { cnt: 2, P: 3.0, fall: 1.4 });
   B.hop(bk[2][0] + 62, 4.0, { spikes: 0.8, label: '가시 벽 4.0m' });
   B.traffic(bk[3][1] - 5, { x: -2, v: 16, len: 50, P: 8, ph: 0, vk: 'police', siren: true });
   B.traffic(bk[3][1] - 8, { x: -8, v: 14, len: 44, P: 9, ph: 4, vk: 'bus' });
   B.traffic(bk[3][0] + 6, { x: 6, dir: -1, acc: 7, v: 19, len: 42, P: 10, ph: 1, vk: 'suv' });
+  B.lines(bk[3][0] + 30, FLAGS, { kind: 'bunting' });
   B.debris(bk[4][0] + 20, { kind: 'sign', size: [2.6, 0.9, 0.35], y0: 38, xr: 20, zs: 10, P: 4.6, n: 2 });
-  B.portal(bk[4][0] + 54, 22, 28, { label: '피날레 창문 22~28m', v0: 8 });
+  B.portal(bk[4][0] + 54, 18, 24, { label: '피날레 창문 18~24m', v0: 8 });
   B.press(bk[5][0] + 14, { d: 5, hgt: 7, xo: 16.4, gapMax: 24, gapMin: 0.8, P: 8, open: 3.5, close: 0.7, closed: 1.3, openT: 1.4, ph: 0 });
   B.ball(bk[5][0] + 40, { py: 19, L: 15, per: 4.6, ph: 1 });
+  B.lines(bk[5][0] + 54, FLAGS, { kind: 'bunting' });
   B.laserScan(bk[6][0] + 24, { x: -12.5, y: 1.0, L: 23.5, w: 0.6, a0: 0 });
-  B.gapFlight(bk[6][0] + 54, 22, { label: '피날레 틈 22m', v0: 9 });
+  B.gapFlight(bk[6][0] + 54, 22, { label: '피날레 틈 22m', v0: 9, style: 'pier' });
   B.hop(bk[7][0] + 18, 6.0, { spikes: 0.8, wire: 3.6, label: '최종 관문: 가시·전선 장벽 6.0m' });
 }

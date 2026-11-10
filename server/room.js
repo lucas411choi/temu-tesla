@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { CFG } from '../shared/config.js';
 import { layoutFor, lobbyMessage, SLOT_NAMES, VALID_COUNTS } from '../shared/keys.js';
 import { Game, PHASE, DT } from './game.js';
+import { MAP_LIST } from '../shared/mapData.js';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';   // I, O 제외
 const MAX_PLAYERS = 4, MAX_ROOMS = 80;
@@ -17,9 +18,10 @@ function send(sock, ev, data, volatile = false) {
 }
 
 class Room {
-  constructor(code, mgr, debug) {
+  constructor(code, mgr, debug, size = null, mapId = 'city') {
     this.code = code; this.mgr = mgr; this.debug = !!debug;
-    this.players = []; this.phase = 'lobby'; this.game = null; this.mapId = 'city';
+    this.size = VALID_COUNTS.includes(size) ? size : null;     // 로비에서 고른 인원(1P/2P/4P). null 이면 1·2·4명 아무나
+    this.players = []; this.phase = 'lobby'; this.game = null; this.mapId = MAP_LIST.includes(mapId) ? mapId : 'city';
     this.pause = null; this.acc = 0; this.last = mgr.now(); this.snapTick = 0; this.endSent = false;
     this.msg = '';
   }
@@ -32,11 +34,13 @@ class Room {
     const layout = layoutFor(n) ? SLOT_NAMES[n] : null;
     const allReady = this.players.every((p, i) => i === 0 || p.ready);
     const allHere = this.players.every((p) => p.connected);
+    const sizeOk = this.size ? n === this.size : VALID_COUNTS.includes(n);
+    const warn = this.size && n !== this.size ? `${this.size}P 방입니다. ${this.size}명이 모이면 시작할 수 있어요 (현재 ${n}명)` : lobbyMessage(n);
     return {
-      code: this.code, phase: this.phase, n, debug: this.debug,
+      code: this.code, phase: this.phase, n, debug: this.debug, size: this.size, map: this.mapId, maps: MAP_LIST,
       players: this.players.map((p, i) => ({ name: p.name, ready: i === 0 ? true : p.ready, connected: p.connected, host: i === 0 })),
-      layout, valid: VALID_COUNTS.includes(n), canStart: VALID_COUNTS.includes(n) && allReady && allHere,
-      warn: lobbyMessage(n), msg: this.msg,
+      layout, valid: sizeOk, canStart: sizeOk && allReady && allHere,
+      warn, msg: this.msg,
     };
   }
   sendLobby() {
@@ -167,7 +171,7 @@ export class RoomManager {
       if (this.rooms.size >= MAX_ROOMS) return cb({ ok: false, err: '서버가 가득 찼습니다. 잠시 뒤에 다시 시도하세요' });
       const code = this.newCode();
       if (!code) return cb({ ok: false, err: '방 코드를 만들 수 없습니다' });
-      const room = new Room(code, this, data && data.debug);
+      const room = new Room(code, this, data && data.debug, data && Number(data.size), data && String(data.map || 'city'));
       const p = { token: crypto.randomBytes(8).toString('hex'), name: cleanName(data && data.name), socket, connected: true, ready: true, slot: -1, dropAt: 0, rate: 0, rateT: 0 };
       room.players.push(p); this.rooms.set(code, room); bind(room, p);
       cb({ ok: true, code, token: p.token });
@@ -181,7 +185,7 @@ export class RoomManager {
       const room = this.rooms.get(code);
       if (!room) return cb({ ok: false, err: '그 코드의 방이 없습니다' });
       if (room.phase !== 'lobby') return cb({ ok: false, err: '이미 게임이 진행 중인 방입니다' });
-      if (room.players.length >= MAX_PLAYERS) return cb({ ok: false, err: '방이 가득 찼습니다 (최대 4명)' });
+      if (room.players.length >= (room.size || MAX_PLAYERS)) return cb({ ok: false, err: room.size ? `방이 가득 찼습니다 (${room.size}P 방)` : '방이 가득 찼습니다 (최대 4명)' });
       const p = { token: crypto.randomBytes(8).toString('hex'), name: cleanName(data && data.name), socket, connected: true, ready: false, slot: -1, dropAt: 0, rate: 0, rateT: 0 };
       room.players.push(p); bind(room, p);
       cb({ ok: true, code, token: p.token });
@@ -212,10 +216,16 @@ export class RoomManager {
       if (room.host !== ctx.player) return cb({ ok: false, err: '방장만 시작할 수 있습니다' });
       if (room.phase !== 'lobby') return cb({ ok: false, err: '이미 진행 중입니다' });
       const st = room.lobbyState();
-      if (!st.valid) return cb({ ok: false, err: lobbyMessage(room.players.length) });
+      if (!st.valid) return cb({ ok: false, err: st.warn || lobbyMessage(room.players.length) || '인원이 맞지 않습니다' });
       if (!st.canStart) return cb({ ok: false, err: '모든 플레이어가 준비 완료여야 시작할 수 있습니다' });
       room.start();
       cb({ ok: true });
+    });
+
+    socket.on('room:map', (data) => {
+      if (!need() || ctx.room.phase !== 'lobby' || ctx.room.host !== ctx.player) return;
+      const id = String((data && data.map) || '');
+      if (MAP_LIST.includes(id)) { ctx.room.mapId = id; ctx.room.sendLobby(); }
     });
 
     socket.on('room:again', () => {

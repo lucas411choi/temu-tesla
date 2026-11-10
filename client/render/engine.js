@@ -87,6 +87,7 @@ export class Engine {
     M.road = new THREE.MeshStandardMaterial({ map: T.road, roughnessMap: T.roadRough, vertexColors: true, roughness: 1, metalness: 0.06, envMapIntensity: 1.0 });
     M.side = new THREE.MeshStandardMaterial({ map: T.pave, vertexColors: true, roughness: 0.85, metalness: 0.05 });
     M.water = new THREE.MeshStandardMaterial({ color: 0x0b2238, roughness: 0.06, metalness: 0.9, envMapIntensity: 1.4 });
+    M.net = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false });
     M.bldg = T.facades.map((f) => new THREE.MeshStandardMaterial({ map: f.map, emissiveMap: f.emissive, emissive: 0xffffff, emissiveIntensity: 1, vertexColors: true, roughness: 0.6, metalness: 0.3, envMapIntensity: 0.9 }));
     M.carPaint = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.28, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.2, sheen: 0.5, sheenColor: new THREE.Color(0xdde8ff), sheenRoughness: 0.5 });
     M.carGlass = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.9, roughness: 0.05, envMapIntensity: 2.0, clearcoat: 1, clearcoatRoughness: 0.02 });
@@ -199,10 +200,13 @@ export class Engine {
     if (this.composer) this.composer.setSize(w, h);
   }
 
+  // 맵마다 다른 시간대 키프레임
+  setEnvKeys(keys) { this.envKeys = keys && keys.length ? keys : ENV_KEYS; }
   // 진행 거리 s 에 따른 하늘/안개/조명/창문 밝기 보간
   applyEnv(s) {
-    let a = ENV_KEYS[0], b = ENV_KEYS[ENV_KEYS.length - 1];
-    for (let i = 0; i < ENV_KEYS.length - 1; i++) if (s >= ENV_KEYS[i].s && s <= ENV_KEYS[i + 1].s) { a = ENV_KEYS[i]; b = ENV_KEYS[i + 1]; break; }
+    const E = this.envKeys || ENV_KEYS;
+    let a = E[0], b = E[E.length - 1];
+    for (let i = 0; i < E.length - 1; i++) if (s >= E[i].s && s <= E[i + 1].s) { a = E[i]; b = E[i + 1]; break; }
     const t0 = b.s === a.s ? 0 : Math.min(1, Math.max(0, (s - a.s) / (b.s - a.s))), t = t0 * t0 * (3 - 2 * t0);
     const c = (k) => new THREE.Color(a[k]).lerp(new THREE.Color(b[k]), t);
     const n = (k) => lerpN(a[k], b[k], t);

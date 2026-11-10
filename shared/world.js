@@ -36,6 +36,10 @@ export function createWorld(map) {
     },
     refY(z) { const g = segAt(-z); return g.ref !== undefined ? g.ref : g.y; },
     wallHalf(z) { return segAt(-z).wall; },
+    // 옆 구조물(건물/펜스/산울타리)의 높이. 이 높이 위로는 옆이 트여 있다 (기본 무한)
+    wallTop(z) { const g = segAt(-z); return g.wallTop === undefined ? Infinity : g.wallTop; },
+    // 천장 높이 (터널/실내). 없으면 0
+    ceilAt(s) { const c = map.ceils || []; for (const q of c) if (s >= q.s0 && s < q.s1) return q.y; return 0; },
     // 위치 z 근처의 치명 도형 수집 (정적 + 시각 T의 동적)
     collect(z, T, out, pad = 5) {
       out.length = 0;
@@ -61,8 +65,8 @@ export function createWorld(map) {
     // 차 OBB가 장애물/건물 벽에 닿았는지. 닿았으면 { tag, src } 반환
     collide(obbs, center, T) {
       world._stamp = ++GSTAMP;
-      const wh = world.wallHalf(center[2]);
-      if (wh !== Infinity) for (let i = 0; i < obbs.length; i++) if (obbMaxAbsX(obbs[i]) > wh) return { tag: 'building' };
+      const g = segAt(-center[2]), wh = g.wall, wt = g.wallTop === undefined ? Infinity : g.wallTop;
+      if (wh !== Infinity) for (let i = 0; i < obbs.length; i++) if (obbMaxAbsX(obbs[i]) > wh && obbs[i].c[1] - 0.4 < wt) return { tag: 'building' };
       world.collect(center[2], T, tmp2, CFG.CAR.boundRadius + 8);
       const h = firstHit(obbs, center, CFG.CAR.boundRadius, tmp2);
       return h ? { tag: h.tag || (h.src && h.src.type) || 'obstacle', src: h.src || null, shape: h } : null;

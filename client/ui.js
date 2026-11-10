@@ -1,12 +1,14 @@
 // UI: 메뉴, 로비, 설정, HUD(연료/배출구/키/고도/진행률), 일시정지, 결과 화면
 import { maskToKeys } from '../shared/keys.js';
+import { MAP_INFO } from '../shared/mapData.js';
+import { CFG } from '../shared/config.js';
 
 const $ = (id) => document.getElementById(id);
 const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`; };
 const SETTINGS_KEY = 'tt-settings';
 
 function loadSettings() {
-  const d = { quality: 'high', auto: true, volume: 0.8, muted: false, name: '', camera: 'chase' };
+  const d = { quality: 'high', auto: true, volume: 0.8, muted: false, name: '', camera: 'chase', map: 'city' };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch (e) { return d; }
 }
 
@@ -25,22 +27,67 @@ const HINTS = {
 export class UI {
   constructor(h) {
     this.h = h; this.settings = loadSettings(); this.last = {}; this.map = null; this.lobbyState = null; this.myReady = false; this.toastTimer = 0;
+    this.players = 1;
+    if (!MAP_INFO[this.settings.map]) this.settings.map = 'city';
     this.bind();
     $('in-name').value = this.settings.name || '';
     $('set-quality').value = this.settings.quality; $('set-cam').value = this.settings.camera || 'chase'; $('set-auto').checked = this.settings.auto; $('set-vol').value = Math.round(this.settings.volume * 100); $('set-mute').checked = this.settings.muted;
+    this.renderMapCards();
+    this.renderStats();
   }
   save() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch (e) { /* ignore */ } }
   name() { const n = $('in-name').value.trim().slice(0, 12) || '플레이어'; this.settings.name = n; this.save(); return n; }
 
+  // ───── 메인 로비: 플레이 → 1P/2P/4P → 설정 패널 ─────
+  closePanels() { for (const id of ['play-setup', 'how']) $(id).classList.add('hidden'); document.querySelectorAll('.mode').forEach((b) => b.classList.remove('on')); }
+  openPlay(on) {
+    $('play-modes').classList.toggle('hidden', !on); $('nav-play').classList.toggle('on', on);
+    if (!on) this.closePanels();
+  }
+  openSetup(n) {
+    this.players = n; this.closePanels();
+    document.querySelectorAll('.mode').forEach((b) => b.classList.toggle('on', +b.dataset.n === n));
+    $('setup-title').textContent = n === 1 ? '1P · 솔로 (8키 전부)' : n === 2 ? '2P · 왼쪽 / 오른쪽' : '4P · 모서리 하나씩';
+    $('setup-solo').classList.toggle('hidden', n !== 1); $('setup-multi').classList.toggle('hidden', n === 1);
+    this.menuMsg(''); $('play-setup').classList.remove('hidden');
+    setTimeout(() => $('in-name').focus(), 30);
+  }
+  renderMapCards() {
+    const el = $('map-cards');
+    el.innerHTML = Object.entries(MAP_INFO).map(([id, m]) => `<button class="map-card ${id === this.settings.map ? 'on' : ''}" data-map="${id}"><b>${m.name}</b><em>${(m.len / 1000).toFixed(1)} km · ${m.sections}구간</em><small>${m.desc}</small></button>`).join('');
+    el.querySelectorAll('.map-card').forEach((b) => { b.onclick = () => { this.settings.map = b.dataset.map; this.save(); this.renderMapCards(); }; });
+  }
+  // 차고: 현재 로드스터 능력치 (config 값에서 계산)
+  renderStats() {
+    const top = 9.33 * 3.6, thrust = CFG.THRUST.perExhaust / (CFG.CAR.mass * CFG.G), burn4 = 100 / (4 * CFG.FUEL.burnPerExhaust), burn1 = 100 / CFG.FUEL.burnPerExhaust;
+    const rows = [
+      ['최고 속도', top / 60, `${top.toFixed(0)} km/h`],
+      ['배출구 추력', thrust * 4 / 4, `${(thrust * 4).toFixed(1)} G`],
+      ['연료 지속', burn4 / 5, `${burn4.toFixed(1)} s`],
+      ['연료 충전', CFG.FUEL.rechargeGround / 12, `${(100 / CFG.FUEL.rechargeGround).toFixed(1)} s`],
+      ['최고 고도', 40 / 50, '≈ 40 m'],
+      ['차체 무게', CFG.CAR.mass / 2500, `${CFG.CAR.mass} kg`],
+    ];
+    $('car-stats').innerHTML = rows.map(([k, v, t]) => `<div class="stat-row"><span>${k}</span><div class="bar"><i style="width:${Math.round(Math.min(1, v) * 100)}%"></i></div><b>${t}</b></div>`).join('')
+      + `<div class="specs">바퀴 4개 (차동 조향, 지면 전용) · 제트 배출구 4개 (모서리별 분사)<br>배출구 1개만 켜면 ${burn1.toFixed(0)}초, 4개 전부 켜면 ${burn4.toFixed(1)}초 동안 분사<br>지면 충전 초당 ${CFG.FUEL.rechargeGround}% · 공중 충전 초당 ${CFG.FUEL.rechargeAir}%</div>`;
+  }
+
   bind() {
     const h = this.h;
-    $('btn-create').onclick = () => { h.unlock(); h.create(this.name()); };
+    $('nav-play').onclick = () => { h.unlock(); this.openPlay($('play-modes').classList.contains('hidden')); };
+    document.querySelectorAll('.mode').forEach((b) => { b.onclick = () => this.openSetup(+b.dataset.n); });
+    $('setup-close').onclick = () => this.closePanels();
+    $('nav-garage').onclick = () => { h.unlock(); h.garage(true); };
+    $('garage-back').onclick = () => h.garage(false);
+    $('nav-how').onclick = () => { const on = $('how').classList.contains('hidden'); this.closePanels(); this.openPlay(false); $('how').classList.toggle('hidden', !on); };
+    $('how-close').onclick = () => this.closePanels();
+    $('btn-solo').onclick = () => { h.unlock(); h.solo(this.name(), this.settings.map); };
+    $('btn-create').onclick = () => { h.unlock(); h.create(this.name(), this.players, this.settings.map); };
     $('btn-join').onclick = () => { h.unlock(); const c = $('in-code').value.trim().toUpperCase(); if (c.length !== 4) return this.menuMsg('방 코드는 4글자예요'); h.join(c, this.name()); };
     $('in-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-join').click(); });
     $('in-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, ''); });
-    $('in-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-create').click(); });
-    $('btn-how').onclick = () => $('how').classList.toggle('hidden');
-    $('btn-settings').onclick = () => this.toggleSettings(true);
+    $('in-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') (this.players === 1 ? $('btn-solo') : $('btn-create')).click(); });
+    $('nav-settings').onclick = () => this.toggleSettings(true);
     $('btn-set-close').onclick = () => this.toggleSettings(false);
     $('btn-full').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); };
     $('set-quality').onchange = (e) => { this.settings.quality = e.target.value; this.save(); h.quality(e.target.value); };
@@ -62,9 +109,11 @@ export class UI {
   lobbyMsg(t) { const el = $('lobby-warn'); el.textContent = t; el.classList.remove('warn'); }
 
   screen(name) {
-    for (const [k, id] of [['menu', 'screen-menu'], ['lobby', 'screen-lobby']]) $(id).classList.toggle('hidden', k !== name);
+    for (const [k, id] of [['menu', 'screen-menu'], ['lobby', 'screen-lobby'], ['garage', 'screen-garage']]) $(id).classList.toggle('hidden', k !== name);
     $('hud').classList.toggle('hidden', name !== 'game');
     $('gl').style.visibility = name === 'game' ? 'visible' : 'hidden';
+    $('menu-gl').style.visibility = name === 'menu' || name === 'garage' ? 'visible' : 'hidden';
+    if (name === 'menu') { this.openPlay(false); }
   }
   wake(on, msg) { $('overlay-wake').classList.toggle('hidden', !on); if (msg) $('wake-msg').textContent = msg; }
   mobile() { $('overlay-wake').classList.add('hidden'); $('overlay-mobile').classList.remove('hidden'); }
@@ -75,6 +124,9 @@ export class UI {
     this.lobbyState = st;
     $('lobby-code').textContent = st.code;
     const me = st.you, isHost = st.players[me] && st.players[me].host;
+    $('lobby-size').textContent = st.size ? `${st.size}P` : '1·2·4P';
+    $('lobby-maps').innerHTML = (st.maps || ['city']).map((id) => `<button class="map-card ${id === st.map ? 'on' : ''}" data-map="${id}" ${isHost ? '' : 'disabled'}><b>${(MAP_INFO[id] || { name: id }).name}</b><em>${MAP_INFO[id] ? (MAP_INFO[id].len / 1000).toFixed(1) + ' km' : ''}</em></button>`).join('');
+    if (isHost) $('lobby-maps').querySelectorAll('.map-card').forEach((b) => { b.onclick = () => this.h.setMap(b.dataset.map); });
     $('lobby-players').innerHTML = st.players.map((p, i) => `<div class="prow ${i === me ? 'me' : ''}"><span class="dot ${p.connected ? '' : 'off'}"></span><span class="nm">${esc(p.name)}${i === me ? ' (나)' : ''}</span>${p.host ? '<span class="tag host">방장</span>' : ''}<span class="tag ${p.ready ? 'ok' : ''}">${p.ready ? '준비 완료' : '대기 중'}</span>${p.connected ? '' : '<span class="tag off">연결 끊김</span>'}</div>`).join('');
     $('lobby-layout').innerHTML = st.layout ? `<b>키 배분 (${st.n}명)</b><br>` + st.layout.map((l, i) => `${i + 1}번 ${esc(st.players[i] ? st.players[i].name : '')}: ${l}`).join('<br>') : '<b>키 배분</b><br>인원이 1, 2, 4명이 되면 자리가 배정됩니다';
     const w = $('lobby-warn'); w.classList.add('warn'); w.textContent = st.warn || st.msg || '';

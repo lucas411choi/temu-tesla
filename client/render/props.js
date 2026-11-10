@@ -2,40 +2,72 @@
 import { MeshBuilder, hex, mulc, mixc } from './mesh.js';
 import { makeRng } from '../../shared/math.js';
 import { emitVehicle } from './vehicles.js';
+import { SCENE_EMIT } from './scenery.js';
+import { K, neon, paint, Z, clipOf, every } from './palette.js';
+import { PARK_EMIT, parkWall, parkGap, parkStep, parkPortal, parkCeil } from './parkProps.js';
 
 export const newBuilders = () => ({
-  prop: new MeshBuilder(), metal: new MeshBuilder(), glass: new MeshBuilder(), glow: new MeshBuilder(), stripe: new MeshBuilder(),
-  road: new MeshBuilder(), side: new MeshBuilder(), bldg: [0, 1, 2, 3].map(() => new MeshBuilder()),
+  prop: new MeshBuilder(), metal: new MeshBuilder(), glass: new MeshBuilder(), glow: new MeshBuilder(), stripe: new MeshBuilder(), net: new MeshBuilder(),
+  road: new MeshBuilder(), side: new MeshBuilder(), grass: new MeshBuilder(), water: new MeshBuilder(), bldg: [0, 1, 2, 3, 4, 5].map(() => new MeshBuilder()),
 });
 
-const K = {
-  conc: hex(0x8d9096), concD: hex(0x62656c), dark: hex(0x24272e), metal: hex(0x454a54), steel: hex(0x9aa3ae), yellow: hex(0xf2b10a), red: hex(0xd8392c),
-  green: hex(0x2f6b3f), brown: hex(0x5a4030), white: hex(0xe6e9ee), asphalt: hex(0x2a2c32), orange: hex(0xe8722a), rust: hex(0x7a4a36),
-  lamp: [7.5, 5.2, 2.6], cyan: [0.4, 5.5, 6.5], red3: [7, 0.5, 0.6], green3: [0.5, 6.5, 2.2], orange3: [7, 2.6, 0.4], white3: [5.5, 5.5, 6],
-};
-export function neon(hue, k = 5) {
-  const h = (hue % 360) / 60, c = 1, x = c * (1 - Math.abs((h % 2) - 1));
-  const [r, g, b] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
-  return [r * k, g * k, b * k];
-}
-const Z = (s) => -s;
-
 // ───────────────── 건물 ─────────────────
+const STYLE_TINT = { city: 1, office: 1.05, glass: 1.1, house: 1.0, hotel: 1.25, site: 0.85, highway: 0.95, neon: 0.8, industrial: 0.8, canyon: 1.05, dawn: 1.1 };
 function bldg(B, d, ctx) {
-  const rng = makeRng(d.seed), mb = B.bldg[d.tex], side = d.side, z = Z(d.s), hz = d.w / 2;
-  const styleTint = { city: 1, site: 0.85, highway: 0.95, neon: 0.8, industrial: 0.8, canyon: 1.05, dawn: 1.1, tunnel: 1, bridge: 1 }[d.style] || 1;
-  const tint = mulc([1, 1, 1], (0.72 + rng() * 0.5) * styleTint);
+  const rng = makeRng(d.seed), mb = B.bldg[d.tex], side = d.side, z = Z(d.s), hz = d.w / 2, x0 = d.x0 || 17, base = d.base || 0;
+  const toon = d.style === 'toon' || d.style === 'stall' || d.style === 'coaster';
+  const hue = d.hue !== undefined ? d.hue : Math.floor(rng() * 360);
+  const tint = toon ? mulc(paint(hue, 1.0, 0.55), 2.0) : d.style === 'castle' ? mixc([0.95, 0.9, 0.82], [0.7, 0.68, 0.66], rng()) : d.style === 'hotel' ? mixc([1, 1, 1], [1.2, 1.05, 0.9], rng() * 0.6) : mulc([1, 1, 1], (0.72 + rng() * 0.5) * (STYLE_TINT[d.style] || 1));
   const off = [rng() * 25, rng() * 28];
-  const h0 = Math.min(d.h, 20 + rng() * 18), h1 = Math.max(h0, Math.min(d.h, 44 + rng() * 20));
-  const tiers = [[0, h0, 0, 0, 0]];
-  if (d.h > h0) tiers.push([h0, h1, 1.0, 0, 1.2]);
-  if (d.h > h1) tiers.push([h1, d.h, 2.6, 2.4, 3.0]);
+  const tiers = d.tiers || [[0, d.h, 0, 0, 0]];
   let top = null;
   for (const [y0, y1, si, ri, bi] of tiers) {
-    const xa = side * (17 + ri), xb = side * (17 + d.d - bi), cx = (xa + xb) / 2, hx = Math.abs(xb - xa) / 2, hzz = hz - si;
-    mb.box(cx, (y0 + y1) / 2, z, hx, (y1 - y0) / 2, hzz, tint, { bevel: 0.3, uv: [25.6, 28.8], uvOff: off, skip: ['+y'] });
-    B.prop.box(cx, y1 + 0.12, z, hx - 0.05, 0.12, hzz - 0.05, mulc(K.concD, 0.8 + rng() * 0.3), { bevel: 0.05 });
-    top = { cx, hx, hz: hzz, y: y1 + 0.24 };
+    const xa = side * (x0 + ri), xb = side * (x0 + d.d - bi), cx = (xa + xb) / 2, hx = Math.abs(xb - xa) / 2, hzz = hz - si;
+    mb.box(cx, base + (y0 + y1) / 2, z, hx, (y1 - y0) / 2, hzz, tint, { bevel: 0.3, uv: [25.6, 28.8], uvOff: off, skip: ['+y'] });
+    B.prop.box(cx, base + y1 + 0.12, z, hx - 0.05, 0.12, hzz - 0.05, mulc(K.concD, 0.8 + rng() * 0.3), { bevel: 0.05 });
+    top = { cx, hx, hz: hzz, y: base + y1 + 0.24 };
+  }
+  // 도로 쪽 면 바로 앞(두께 t 인 장식의 중심 x)
+  const fx = (t) => side * (x0 - t - 0.02);
+  if (toon || d.style === 'castle') {
+    const H = tiers[tiers.length - 1][1];
+    if (d.style === 'castle') {
+      for (let k = -hz + 0.8; k < hz - 0.4; k += 2.2) B.prop.box(top.cx, top.y + 0.7, z + k, top.hx, 0.7, 0.6, mulc(tint, 0.8));
+      for (let y = 9; y < H - 4; y += 13) for (let k = -hz + 4; k < hz - 3; k += 11) { B.glow.box(fx(0.03), base + y, z + k, 0.03, 0.9, 0.35, [4, 2.2, 0.6]); B.prop.box(fx(0.06), base + y + 1.0, z + k, 0.06, 0.12, 0.5, mulc(tint, 0.6)); }
+      for (const sz of [-1, 1]) B.prop.box(fx(-1.25), base + H / 2 + 0.75, z + sz * (hz - 1.2), 1.2, H / 2 + 0.75, 1.2, mulc(tint, 0.85), { bevel: 0.2 });
+      B.prop.box(fx(0.3), base + 0.9, z, 0.3, 0.9, hz * 0.9, mulc(tint, 0.7));
+      return;
+    }
+    // 동화풍 파사드: 색 띠 + 창문 테 + 지붕 장식(높이 안쪽) + 가판대/간판
+    const c2 = paint(hue + 150, 0.95, 0.75), c3 = mulc([1, 1, 1], 0.95);
+    if (d.tex !== 4) for (let y = 4.2; y < H - 1; y += 4.6) B.prop.box(fx(0.12), base + y, z, 0.12, 0.18, hz - 0.1, c2);
+    else { B.prop.box(fx(0.15), base + H - 1.2, z, 0.15, 1.2, hz - 0.1, c2); for (let k = -hz + 1.5; k < hz - 1; k += 3) B.glow.box(fx(0.04), base + H - 0.5, z + k, 0.04, 0.25, 0.25, neon(hue + k * 25, 2.8)); }
+    B.prop.box(top.cx, top.y + 0.3, z, top.hx + 0.2, 0.3, top.hz + 0.2, c3);
+    for (let k = -hz + 1; k < hz - 0.5; k += 1.4) B.glow.box(fx(0.05), base + Math.min(H - 0.6, 3.9), z + k, 0.05, 0.08, 0.08, neon(hue + k * 20, 2.4));
+    if (d.style === 'stall') {
+      // 가판대: 줄무늬 차양 + 카운터 + 음식 간판
+      for (let k = -hz + 0.6; k < hz - 0.3; k += 1.2) { B.prop.save().translate(fx(0.32), 3.0, z + k + 0.3).rotZ(side * 0.4); B.prop.box(0, 0, 0, 0.3, 0.04, 0.3, (Math.round(k / 1.2) % 2) ? mulc(K.white, 1) : paint(hue, 0.95, 0.85)); B.prop.restore(); }
+      B.prop.box(fx(0.25), 0.55, z, 0.25, 0.55, hz * 0.8, mulc(K.brown, 1.2)); B.glass.box(fx(0.04), 1.7, z, 0.03, 0.6, hz * 0.75, hex(0x2a3a4a));
+      if (d.food) ctx.signs.push({ x: fx(0.02), y: 4.4, z, w: Math.min(d.w * 0.8, 6), h: 1.0, ry: -side * Math.PI / 2, text: d.food, color: '#ffe27a', fixed: true });
+    } else {
+      B.prop.save().translate(fx(0.26), 2.9, z).rotZ(side * 0.45); B.prop.box(0, 0, 0, 0.26, 0.04, hz * 0.85, c2); B.prop.restore();
+      B.glass.box(fx(0.04), 1.5, z, 0.03, 1.1, hz * 0.6, hex(0x2a4a6a));
+    }
+    return;
+  }
+  if (d.style === 'house') {
+    // 저층 상가: 어닝(차양), 가로/세로 간판, 셔터, 실외기
+    const hue = Math.floor(rng() * 360);
+    B.glow.box(fx(0.06), 3.75, z, 0.06, 0.32, hz * 0.8, neon(hue, 2.6));
+    const aw = [[0.85, 0.18, 0.2], [0.15, 0.45, 0.75], [0.9, 0.62, 0.1], [0.2, 0.55, 0.3]][Math.floor(rng() * 4)];
+    B.prop.save().translate(fx(0.24), 2.95, z).rotZ(side * 0.45);
+    B.prop.box(0, 0, 0, 0.26, 0.04, hz * 0.85, aw, { bevel: 0.02 }); B.prop.restore();
+    if (rng() < 0.7) { const vh = Math.min(d.h - 6, 4 + rng() * 5); B.glow.box(fx(0.08), 5 + vh / 2, z + (rng() - 0.5) * hz, 0.08, vh / 2, 0.55, neon((hue + 140) % 360, 3.0)); }
+    B.metal.box(fx(0.04), 1.1, z, 0.04, 1.1, hz * 0.6, mulc(K.steel, 0.55));
+    for (let y = 1.3; y < 2.2; y += 0.22) B.metal.box(fx(0.06), y, z, 0.02, 0.03, hz * 0.6, mulc(K.dark, 1.6));
+    B.prop.box(top.cx, top.y + 0.45, z + hz - 0.15, top.hx, 0.45, 0.12, K.concD); B.prop.box(top.cx, top.y + 0.45, z - hz + 0.15, top.hx, 0.45, 0.12, K.concD);
+    if (rng() < 0.6) B.metal.box(fx(0.2), 5.5 + rng() * Math.max(1, d.h - 8), z + (rng() - 0.5) * hz, 0.2, 0.32, 0.42, mulc(K.steel, 0.8));
+    return;
   }
   // 옥상 디테일: 실외기, 물탱크, 안테나, 광고판
   const n = 2 + Math.floor(rng() * 4);
@@ -50,14 +82,17 @@ function bldg(B, d, ctx) {
   // 네온 모서리 띠
   if (d.neon) {
     const hue = [180, 300, 330, 40, 140][Math.floor(rng() * 5)], th = Math.min(d.h, 24 + rng() * 40);
-    for (const sz of [-1, 1]) B.glow.box(side * 17.12, 4 + th / 2, z + sz * (hz - 0.2), 0.1, th / 2, 0.09, neon(hue, 4));
-    B.glow.box(side * 17.12, 6.4, z, 0.08, 0.1, hz - 0.3, neon(hue, 3.6));
+    for (const sz of [-1, 1]) B.glow.box(fx(0.1), base + 4 + th / 2, z + sz * (hz - 0.2), 0.1, th / 2, 0.09, neon(hue, 4));
+    B.glow.box(fx(0.08), base + 6.4, z, 0.08, 0.1, hz - 0.3, neon(hue, 3.6));
   }
+  // 호텔: 발코니 띠 / 유리 타워: 세로 멀리언
+  if (d.style === 'hotel') for (let y = 8; y < tiers[0][1] - 2; y += 3.6) B.prop.box(fx(0.22), base + y, z, 0.22, 0.08, hz * 0.92, mulc(K.white, 0.9));
+  if (d.style === 'glass') for (let k = -hz + 2; k < hz - 1; k += 3.2) B.metal.box(fx(0.08), base + tiers[0][1] / 2, z + k, 0.08, tiers[0][1] / 2, 0.06, mulc(K.steel, 0.9));
   // 1층 상점 간판(도로 쪽)
-  if (rng() < 0.75) {
+  if (base === 0 && (d.shop === undefined ? rng() < 0.75 : d.shop)) {
     const hue = Math.floor(rng() * 360);
-    B.glow.box(side * 17.25, 3.3, z, 0.12, 0.45, hz * (0.4 + rng() * 0.3), neon(hue, 3.2));
-    B.metal.box(side * 17.1, 0.9, z, 0.08, 0.9, hz * 0.55, mulc(K.dark, 1.4));
+    B.glow.box(fx(0.12), 3.3, z, 0.12, 0.45, hz * (0.4 + rng() * 0.3), neon(hue, 3.2));
+    B.metal.box(fx(0.06), 0.9, z, 0.06, 0.9, hz * 0.55, mulc(K.dark, 1.4));
   }
 }
 
@@ -73,7 +108,14 @@ function lamp(B, d, ctx) {
   ctx.lamps.push([d.side * 10.8, 8.5, z]);
 }
 function tree(B, d, ctx) {
-  const rng = makeRng(d.seed), x = d.side * 15.3, z = Z(d.s);
+  const rng = makeRng(d.seed), x = d.x !== undefined ? d.x : d.side * 15.3, z = Z(d.s);
+  if (d.kind === 'palm') {
+    // 야자수: 휜 줄기 + 잎 8장 (충돌 구 r=2.3, y=5 안에 들어감)
+    let px = x, py = 0;
+    for (let k = 0; k < 6; k++) { const nx = x + Math.sin(k * 0.25) * 0.5 * -d.side, ny = py + 1.05; B.prop.beam([px, py, z], [nx, ny, z], 0.3 - k * 0.02, 0.3 - k * 0.02, mulc(K.brown, 1.2 - k * 0.05)); px = nx; py = ny; }
+    for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + rng() * 0.3; B.prop.save().translate(px, py, z).rotY(a).rotZ(-0.5); B.prop.box(1.1, 0, 0, 1.15, 0.04, 0.32, mulc(K.green, 1.1 + rng() * 0.4)); B.prop.restore(); }
+    return;
+  }
   B.prop.cyl(x, 0, z, 0.26, 3.2, 6, K.brown, { r2: 0.2 });
   const g = mulc(K.green, 0.7 + rng() * 0.6), g2 = mixc(g, [0.5, 0.65, 0.2], 0.3);
   B.prop.cyl(x, 2.6, z, 2.3, 1.9, 7, g, { r2: 1.1, bottom: true });
@@ -133,8 +175,15 @@ function xstreet(B, d) {
 
 // ───────────────── 도로 위 장애물 ─────────────────
 function wall(B, d, ctx) {
-  const z = Z(d.s), cx = (d.x0 + d.x1) / 2, hx = (d.x1 - d.x0) / 2, h = d.h, t = d.t;
-  if (d.style === 'pipe') {
+  if (parkWall(B, d)) return;
+  const z = Z(d.s), cx = (d.x0 + d.x1) / 2, hx = (d.x1 - d.x0) / 2, h = d.h, t = d.th || 1.2;
+  if (d.style === 'concrete') {
+    // 공사장 콘크리트 장벽: 회색 벽 + 노랑/검정 띠 + 경고등
+    B.prop.box(cx, h / 2, z, hx, h / 2, t / 2, mulc(K.conc, 0.95), { bevel: 0.12 });
+    B.stripe.box(cx, Math.min(h - 0.35, 0.9), z, hx, 0.3, t / 2 + 0.03, [1, 1, 1], { uv: [2.6, 2.6] });
+    B.prop.box(cx, h + 0.06, z, hx, 0.06, t / 2 + 0.05, K.dark, { bevel: 0.03 });
+    for (let x = d.x0 + 2; x < d.x1; x += 4) { B.glow.box(x, h + 0.25, z + t / 2 + 0.05, 0.14, 0.14, 0.04, K.orange3); B.metal.box(x, h / 2, z + t / 2 + 0.02, 0.05, h / 2 - 0.2, 0.02, mulc(K.dark, 1.3)); }
+  } else if (d.style === 'pipe') {
     B.metal.box(cx, h / 2, z, hx, h / 2, t / 2, mulc(K.steel, 0.6), { bevel: 0.1 });
     for (let x = d.x0 + 2; x < d.x1; x += 6) { B.prop.box(x, h / 2, z, 0.35, h / 2 + 0.05, t / 2 + 0.05, K.yellow, { bevel: 0.04 }); B.metal.box(x, h + 0.35, z, 0.3, 0.1, 0.3, K.red); }
   } else {
@@ -191,6 +240,7 @@ function finish(B, d, ctx) {
   ctx.signs.push({ x: 0, y: 14.2, z, w: 10, h: 2.2, ry: 0, text: 'FINISH', color: '#ffd24a', fixed: true, nx: 1 });
 }
 function gap(B, d) {
+  if (parkGap(B, d)) return;
   const len = d.s1 - d.s0, z = Z((d.s0 + d.s1) / 2);
   B.prop.box(0, -9.6, z, 17, 0.2, len / 2 + 2, mulc(K.dark, 0.5));
   for (const e of [d.s0, d.s1]) {
@@ -201,13 +251,24 @@ function gap(B, d) {
   for (const x of [-13.5, 13.5]) B.metal.beam([x, -0.5, Z(d.s0)], [x, -0.5, Z(d.s1)], 0.5, 0.6, mulc(K.rust, 0.7));
 }
 function step(B, d) {
+  if (parkStep(B, d)) return;
   const len = d.s1 - d.s0, z = Z((d.s0 + d.s1) / 2);
+  if (d.style === 'girder') {
+    // 크레인이 들어 올린 철골 데크: I빔 + 데크 플레이트 + 기둥
+    B.metal.box(0, d.h - 0.2, z, 16.5, 0.2, len / 2, mulc(K.steel, 0.55), { bevel: 0.03 });
+    for (let x = -14; x <= 14; x += 7) { B.metal.box(x, d.h - 0.75, z, 0.18, 0.35, len / 2, mulc(K.orange, 0.9)); B.metal.box(x, d.h - 0.4, z, 0.5, 0.04, len / 2, mulc(K.orange, 0.8)); }
+    for (let s = d.s0 + 3; s < d.s1; s += 9) for (const x of [-12, 0, 12]) B.metal.box(x, (d.h - 1.1) / 2, Z(s), 0.25, (d.h - 1.1) / 2, 0.25, mulc(K.orange, 0.7));
+    B.stripe.box(0, d.h / 2, Z(d.s0) + 0.62, 16.6, d.h / 2, 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
+    for (let x = -15; x <= 15; x += 5) B.glow.box(x, d.h + 0.15, Z(d.s0) + 0.7, 0.14, 0.14, 0.05, K.orange3);
+    return;
+  }
   B.prop.box(0, d.h / 2 - 0.02, z, 16.5, d.h / 2 - 0.02, len / 2, K.concD, { bevel: 0.1 });
   B.stripe.box(0, d.h / 2, Z(d.s0) + 0.62, 16.6, d.h / 2, 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
   for (let x = -15; x <= 15; x += 5) B.glow.box(x, d.h + 0.15, Z(d.s0) + 0.7, 0.14, 0.14, 0.05, K.orange3);
 }
 function portal(B, d) {
-  const z = Z(d.s), cx = (d.x0 + d.x1) / 2, hx = (d.x1 - d.x0) / 2, t = d.t, col = [0.8, 0.85, 0.95];
+  if (parkPortal(B, d)) return;
+  const z = Z(d.s), cx = (d.x0 + d.x1) / 2, hx = (d.x1 - d.x0) / 2, t = d.th || 1.6, col = [0.8, 0.85, 0.95];
   const mk = (y0, y1) => B.bldg[0].box(cx, (y0 + y1) / 2, z, hx, (y1 - y0) / 2, t / 2, col, { bevel: 0.15, uv: [25.6, 28.8] });
   if (d.y0 > 0.05) mk(0, d.y0);
   mk(d.y1, d.H);
@@ -217,18 +278,27 @@ function portal(B, d) {
   for (let y = d.y0 + 2; y < d.y1; y += 4) B.glow.box(cx, y, z + t / 2 + 0.03, 0.04, 0.04, 0.04, c);
 }
 function ceil(B, d) {
-  const len = d.s1 - d.s0, z = Z((d.s0 + d.s1) / 2), y = d.y;
+  if (parkCeil(B, d)) return;
+  const [a, b] = clipOf(d), len = b - a, z = Z((a + b) / 2), y = d.y;
+  if (d.style === 'slab') {
+    // 공사 중 건물의 콘크리트 슬래브 천장 + 보 + 작업등
+    B.prop.box(0, y + 2.5, z, 16.6, 2.5, len / 2, mulc(K.conc, 0.75), { bevel: 0.08 });
+    for (const k of every(d, 3, 7, a, b)) { B.prop.box(0, y - 0.35, Z(k), 16.6, 0.35, 0.3, mulc(K.concD, 0.9)); }
+    for (const k of every(d, 6, 14, a, b)) for (const x of [-7, 7]) { B.glow.box(x, y - 0.75, Z(k), 0.5, 0.06, 0.2, [6, 5.2, 3.6]); B.metal.beam([x, y - 0.7, Z(k)], [x, y - 0.05, Z(k)], 0.03, 0.03, K.dark); }
+    return;
+  }
   B.prop.box(0, y + 2.5, z, 16.6, 2.5, len / 2, d.style === 'tunnel' ? hex(0x30343c) : K.dark, { bevel: 0.1 });
   if (d.style === 'tunnel') {
     for (const s of [-1, 1]) {
       B.prop.box(s * 14.3, (y + 5) / 2, z, 0.5, (y + 5) / 2, len / 2, hex(0x474b54), { bevel: 0.08 });
-      for (let k = d.s0 + 6; k < d.s1; k += 12) B.glow.box(s * 13.75, 3.4, Z(k), 0.04, 0.12, 2.2, [4.5, 4.2, 3.4]);
+      for (const k of every(d, 6, 12, a, b)) B.glow.box(s * 13.75, 3.4, Z(k), 0.04, 0.12, 2.2, [4.5, 4.2, 3.4]);
+      for (const k of every(d, 0, 4, a, b)) B.prop.box(s * 13.78, 0.6, Z(k), 0.02, 0.6, 1.9, (Math.round(k / 4) % 2) ? mulc(K.yellow, 0.7) : K.dark);
     }
-    for (let k = d.s0 + 4; k < d.s1; k += 14) for (const x of [-6, 6]) B.glow.box(x, y - 0.06, Z(k), 0.3, 0.04, 2.4, [6, 6, 5.6]);
-    for (let k = d.s0 + 20; k < d.s1; k += 60) { B.metal.beam([-13.8, y - 0.3, Z(k)], [13.8, y - 0.3, Z(k)], 0.5, 0.5, K.metal); }
+    for (const k of every(d, 4, 14, a, b)) for (const x of [-6, 6]) B.glow.box(x, y - 0.06, Z(k), 0.3, 0.04, 2.4, [6, 6, 5.6]);
+    for (const k of every(d, 20, 60, a, b)) { B.metal.beam([-13.8, y - 0.3, Z(k)], [13.8, y - 0.3, Z(k)], 0.5, 0.5, K.metal); B.glow.box(0, y - 0.65, Z(k), 3, 0.25, 0.05, [0.3, 3.2, 1.2]); }
   } else {
-    for (let k = d.s0 + 2; k < d.s1 - 1; k += 3.2) for (let x = -15.5; x <= 15.5; x += 1.55) { B.metal.save().translate(x, y, Z(k)).rotX(Math.PI).cone(0, 0, 0, 0.3, d.spikes || 1.1, 4, mixc(K.steel, K.red, 0.25)); B.metal.restore(); }
-    for (let k = d.s0 + 5; k < d.s1; k += 9) B.glow.box(0, y - 0.05, Z(k), 14, 0.04, 0.12, K.orange3);
+    for (const k of every(d, 2, d.every || 3.2, a, b, 1)) for (let x = -15.5; x <= 15.5; x += 1.55) { B.metal.save().translate(x, y, Z(k)).rotX(Math.PI).cone(0, 0, 0, 0.3, d.spikes || 1.1, 4, mixc(K.steel, K.red, 0.25)); B.metal.restore(); }
+    for (const k of every(d, 5, 9, a, b)) B.glow.box(0, y - 0.05, Z(k), 14, 0.04, 0.12, K.orange3);
   }
 }
 function laserfix(B, d) {
@@ -265,19 +335,23 @@ function signgantry(B, d, ctx) {
   ctx.signs.push({ x: 0, y: 7, z: z + 0.52, w: 22, h: 1.5, ry: 0, text: '▶ DOWNTOWN  12 km', color: '#39ff88', fixed: true, nx: 1 });
 }
 function rail(B, d) {
-  const c = Z((d.s0 + d.s1) / 2), hz = (d.s1 - d.s0) / 2;
+  const [a, b] = clipOf(d), c = Z((a + b) / 2), hz = (b - a) / 2;
   if (d.style === 'parapet' || d.style === 'bridge') {
     B.prop.box(d.x, 0.55, c, 0.28, 0.55, hz, K.concD, { bevel: 0.06 });
     B.metal.box(d.x, 1.15, c, 0.12, 0.05, hz, K.steel);
-    for (let s = d.s0 + 2; s < d.s1; s += 10) B.glow.box(d.x - Math.sign(d.x) * 0.3, 0.8, Z(s), 0.03, 0.05, 0.4, K.orange3);
+    for (const s of every(d, 2, 10, a, b)) B.glow.box(d.x - Math.sign(d.x) * 0.3, 0.8, Z(s), 0.03, 0.05, 0.4, K.orange3);
   } else {
     B.metal.box(d.x, 0.62, c, 0.06, 0.18, hz, K.steel);
-    for (let s = d.s0 + 1; s < d.s1; s += 3.8) B.metal.box(d.x, 0.4, Z(s), 0.06, 0.4, 0.06, K.dark);
+    for (const s of every(d, 1, 3.8, a, b)) B.metal.box(d.x, 0.4, Z(s), 0.06, 0.4, 0.06, K.dark);
   }
 }
-function pillar(B, d) { B.prop.box(d.x, d.h / 2, Z(d.s), d.w / 2, d.h / 2, d.w / 2, K.concD, { bevel: 0.1 }); }
+function pillar(B, d) {
+  if (d.style === 'track') { B.metal.box(d.x, d.h / 2, Z(d.s), d.w / 2, d.h / 2, d.w / 2, mulc(K.white, 0.9), { bevel: 0.08 }); B.glow.box(d.x, d.h - 0.4, Z(d.s) + d.w / 2 + 0.01, d.w * 0.3, 0.1, 0.01, K.orange3); return; }
+  if (d.style === 'column') { B.prop.box(d.x, d.h / 2, Z(d.s), d.w / 2, d.h / 2, d.w / 2, mulc(K.conc, 0.95), { bevel: 0.05 }); B.stripe.box(d.x, 0.6, Z(d.s), d.w / 2 + 0.02, 0.6, d.w / 2 + 0.02, [1, 1, 1], { uv: [2.6, 2.6] }); return; }
+  B.prop.box(d.x, d.h / 2, Z(d.s), d.w / 2, d.h / 2, d.w / 2, K.concD, { bevel: 0.1 });
+}
 
-export const EMIT = { bldg, lamp, tree, signal, busstop, subway, billboard, sign, xwalk, xstreet, wall, spikes, veh, pad, cp, finish, gap, step, portal, ceil, laserfix, piperack, arch, wire, signgantry, rail, pillar };
+export const EMIT = { bldg, lamp, tree, signal, busstop, subway, billboard, sign, xwalk, xstreet, wall, spikes, veh, pad, cp, finish, gap, step, portal, ceil, laserfix, piperack, arch, wire, signgantry, rail, pillar, ...SCENE_EMIT, ...PARK_EMIT };
 
-// 장식 항목의 대표 s (청크 배정용)
-export const decorS = (d) => (d.s !== undefined ? d.s : d.s0 !== undefined ? d.s0 : 0);
+// 장식 항목의 대표 s (청크 배정용). 청크로 잘린 항목은 잘린 시작점(c0)
+export const decorS = (d) => (d.c0 !== undefined ? d.c0 : d.s !== undefined ? d.s : d.s0 !== undefined ? d.s0 : 0);

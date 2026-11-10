@@ -13,6 +13,7 @@ export class Color {
   set(r, g, b) { if (g === undefined) { const h = typeof r === 'number' ? r : 0xffffff; this.r = ((h >> 16) & 255) / 255; this.g = ((h >> 8) & 255) / 255; this.b = (h & 255) / 255; } else { this.r = r; this.g = g; this.b = b; } return this; }
   setRGB(r, g, b) { return this.set(r, g, b); } copy(c) { return this.set(c.r, c.g, c.b); } clone() { return new Color(this.r, this.g, this.b); }
   lerp(c, t) { this.r += (c.r - this.r) * t; this.g += (c.g - this.g) * t; this.b += (c.b - this.b) * t; return this; }
+  setHSL(h, s, l) { return this.set(l, l, l); } multiplyScalar(k) { this.r *= k; this.g *= k; this.b *= k; return this; }
 }
 class Euler { constructor() { this.x = 0; this.y = 0; this.z = 0; } set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } }
 export class Object3D {
@@ -36,6 +37,7 @@ export class InstancedBufferGeometry extends BufferGeometry { constructor() { su
 class ArgGeometry extends BufferGeometry { constructor(...a) { super(); this.args = a; } }
 export class BoxGeometry extends ArgGeometry {} export class PlaneGeometry extends ArgGeometry {} export class CylinderGeometry extends ArgGeometry {} export class ConeGeometry extends ArgGeometry {}
 export class RingGeometry extends ArgGeometry {} export class CircleGeometry extends ArgGeometry {} export class SphereGeometry extends ArgGeometry {} export class IcosahedronGeometry extends ArgGeometry {}
+export class TorusGeometry extends ArgGeometry {}
 class Material {
   constructor(p = {}) { this.isMaterial = true; this.opacity = 1; this.map = null; Object.assign(this, p); this._p = p; this.color = p.color instanceof Color ? p.color : new Color(p.color === undefined ? 0xffffff : p.color); }
   clone() { return new this.constructor({ ...this._p, color: this.color.clone() }); } dispose() {} set needsUpdate(v) {}

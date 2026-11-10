@@ -32,29 +32,39 @@ const fx = new Effects(THREE, engine.scene, 'high', engine.mats);
 const car = new CarView(THREE, engine.scene, engine.mats, engine.tex, fx);
 fx.setFragments(car.fragments(), car.wheelData);
 console.log('차량 뷰 OK, 파편 조각 수:', car.fragData.length);
-const map = getMap('city'), world = createWorld(map);
-const city = new CityView(THREE, engine.scene, map, engine.mats, engine.tex);
-const hz = new HazardView(THREE, engine.scene, map, engine.mats, engine.tex, fx);
-
-// 1) 맵 전체 청크 빌드
-let tris = 0;
-for (let s = 0; s <= map.length; s += 150) {
-  try { city.update(s, true); } catch (e) { bad(`청크 s=${s}: ${e.stack.split('\n').slice(0, 3).join(' | ')}`); break; }
-  for (const ch of city.chunks.values()) for (const g of ch.geoms) { const p = g.attributes.position; if (p) { tris += p.array.length / 9; for (let i = 0; i < p.array.length; i += 997) if (!Number.isFinite(p.array[i])) { bad('NaN 정점 발견'); break; } } }
-}
-console.log(`맵 청크 전체 빌드 OK (누적 ${(tris / 1000).toFixed(0)}k 삼각형 확인), 청크 수 ${city.byChunk.size}`);
-
-// 2) 모든 동적 장애물 시각 생성/갱신
-let created = 0;
-for (let s = 0; s <= map.length; s += 70) {
-  for (const T of [0.0, 1.7, 3.3, 6.1, 9.4]) {
-    try { hz.update(T, s, 0.016); } catch (e) { bad(`장애물 s=${s} T=${T}: ${e.stack.split('\n').slice(0, 4).join(' | ')}`); break; }
+let city = null;
+for (const mapId of ['city', 'park']) {
+  const map = getMap(mapId);
+  createWorld(map);
+  if (city) city.dispose();
+  city = new CityView(THREE, engine.scene, map, engine.mats, engine.tex);
+  const hz = new HazardView(THREE, engine.scene, map, engine.mats, engine.tex, fx);
+  engine.setEnvKeys(map.env);
+  // 1) 맵 전체 청크 빌드 (청크당 삼각형 수도 확인)
+  let tris = 0, worst = 0, worstAt = 0;
+  for (let s = 0; s <= map.length; s += 150) {
+    try { city.update(s, true); } catch (e) { bad(`[${mapId}] 청크 s=${s}: ${e.stack.split('\n').slice(0, 3).join(' | ')}`); break; }
+    for (const [ci, ch] of city.chunks) {
+      let ct = 0;
+      for (const g of ch.geoms) { const p = g.attributes.position; if (p) { ct += p.array.length / 9; for (let i = 0; i < p.array.length; i += 997) if (!Number.isFinite(p.array[i])) { bad(`[${mapId}] NaN 정점 발견`); break; } } }
+      tris += ct; if (ct > worst) { worst = ct; worstAt = ci * 300; }
+    }
   }
-  created = Math.max(created, hz.active.size);
+  console.log(`[${mapId}] 맵 청크 전체 빌드 OK (누적 ${(tris / 1000).toFixed(0)}k 삼각형, 가장 무거운 청크 s=${worstAt}: ${(worst / 1000).toFixed(0)}k), 청크 수 ${city.byChunk.size}`);
+  // 2) 모든 동적 장애물 시각 생성/갱신
+  let created = 0;
+  for (let s = 0; s <= map.length; s += 70) {
+    for (const T of [0.0, 1.7, 3.3, 6.1, 9.4]) {
+      try { hz.update(T, s, 0.016); } catch (e) { bad(`[${mapId}] 장애물 s=${s} T=${T}: ${e.stack.split('\n').slice(0, 4).join(' | ')}`); break; }
+    }
+    created = Math.max(created, hz.active.size);
+  }
+  hz.clear();
+  console.log(`[${mapId}] 동적 장애물 시각 OK (동시 활성 최대 ${created}개)`);
+  const types = new Set(map.dynamics.map((e) => e.type)); console.log('  종류:', [...types].join(', '));
+  for (const s of [0, 1000, 3000, 5000, map.length]) { try { engine.applyEnv(s); } catch (e) { bad('applyEnv: ' + e.stack); } }
 }
-hz.clear();
-console.log(`동적 장애물 시각 OK (동시 활성 최대 ${created}개)`);
-const types = new Set(map.dynamics.map((e) => e.type)); console.log('  종류:', [...types].join(', '));
+engine.setEnvKeys(getMap('city').env);
 
 // 3) 차량/이펙트/엔진
 const state = (o) => ({ p: [0, 0.5, -100], q: [0, 0, 0, 1], v: [0, 0, -9], ex: 0, f: 80, inv: 0, alive: true, groundY: 0, alt: 0, ...o });

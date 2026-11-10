@@ -53,7 +53,7 @@ export const CFG = {
 
   // ───────── 연료 ─────────
   FUEL: {
-    burnPerExhaust: 7,    // %/s (배출구 개수 × 이 값)
+    burnPerExhaust: 10,   // %/s (배출구 개수 × 이 값). 4개 전부 = 초당 40% → 약 2.5초 (예전 7 → 3.6초: 한 블록을 통째로 뛰어넘을 수 있었음)
     rechargeGround: 8,    // %/s 지면
     rechargeAir: 4,       // %/s 공중(아무것도 안 누를 때)
     relight: 5,           // 연료가 0이 된 뒤 이 값까지 회복되기 전엔 재점화 금지

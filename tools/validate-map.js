@@ -15,15 +15,16 @@ import { bestFlight } from './autopilot.js';
 
 const FAST = process.argv.includes('--fast');
 const NOWRITE = process.argv.includes('--no-write');
+const MAP_ID = (process.argv.find((a) => a.startsWith('--map=')) || '--map=city').slice(6);
 const SAFETY = 1.3;                 // 안전 여유 (필요 연료 × 1.3 ≤ 100%)
-const MIN_TIME = 15 * 60;           // 최단 완주 시간 기준(초)
 const errors = [], warns = [];
 const err = (m) => { errors.push(m); console.log('  ✗', m); };
 const warn = (m) => { warns.push(m); console.log('  △', m); };
 const ok = (m) => console.log('  ✓', m);
 const head = (t) => console.log(`\n━━ ${t}`);
 
-const map = getMap('city');
+const map = getMap(MAP_ID);
+const MIN_TIME = map.minTime || 0;  // 최단 완주 시간 기준(초)
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 // ───────────────── 0) 요약 ─────────────────
@@ -147,8 +148,8 @@ const fuelTable = {};
   console.log(`  → ${pass}/${flights.length} 통과`);
   if (!FAST && !NOWRITE) {
     const out = `// 자동 생성 파일 - tools/validate-map.js 가 갱신합니다. 비행 구간별 필요 연료량(%)\n// fuel=자동조종 시뮬레이션 소모량, time=소요시간(s), alt=최고고도(m)\nexport default ${JSON.stringify(fuelTable, null, 1)};\n`;
-    fs.writeFileSync(path.join(here, '../shared/maps/city.fuel.js'), out);
-    console.log('  → shared/maps/city.fuel.js 기록');
+    fs.writeFileSync(path.join(here, `../shared/maps/${MAP_ID}.fuel.js`), out);
+    console.log(`  → shared/maps/${MAP_ID}.fuel.js 기록`);
   }
 }
 
@@ -233,7 +234,8 @@ head('7) 최단 완주 시간 계산 (완벽한 플레이 가정)');
   console.log(`  공중 구간은 지면 최고속도의 1.5배(${vFly.toFixed(1)} m/s)로 간다고 가정: ${mm(tAir)}`);
   console.log(`  연료 충전 대기(연료 소모 85% 가정): ${wait.toFixed(0)}초`);
   console.log(`  ▶ 이론상 최단 완주 시간 ≈ ${mm(total)} (${total.toFixed(0)}초)   [장애물 대기시간·사망은 포함하지 않은 하한 추정]`);
-  if (total < MIN_TIME) err(`최단 시간 추정 ${total.toFixed(0)}초 < 15분(${MIN_TIME}초)`); else ok(`15분(${MIN_TIME}초) 이상`);
+  if (!MIN_TIME) ok('이 맵은 최단 시간 기준 없음');
+  else if (total < MIN_TIME) err(`최단 시간 추정 ${total.toFixed(0)}초 < ${MIN_TIME / 60}분(${MIN_TIME}초)`); else ok(`${MIN_TIME / 60}분(${MIN_TIME}초) 이상`);
 }
 
 // ───────────────── 결과 ─────────────────
