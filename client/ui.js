@@ -6,6 +6,7 @@ import { CFG } from '../shared/config.js';
 const $ = (id) => document.getElementById(id);
 const fmtTime = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`; };
 const SETTINGS_KEY = 'tt-settings';
+const KEYS9 = ['q', 'w', 'a', 's', 'e', 'r', 'd', 'f', 'space'];
 
 function loadSettings() {
   const d = { quality: 'high', auto: true, volume: 0.8, muted: false, name: '', camera: 'chase', map: 'city' };
@@ -13,15 +14,16 @@ function loadSettings() {
 }
 
 const HINTS = {
-  start: (m) => `출발 준비! 내 담당 키: ${m.all}\n${m.n > 1 ? '친구들과 키를 나눠 맡았어요. 서로 호흡을 맞춰 보세요!' : '혼자서 8개 키를 모두 맡았어요.'}`,
-  wheels: (m) => `바퀴 키${m.wheels ? ` (${m.wheels})` : ''}를 눌러 달려 보세요.\n눌린 바퀴만 굴러서 차가 반대쪽으로 돕니다 (예: Q만 누르면 오른쪽으로). 지면에서는 연료가 닳지 않아요.`,
+  start: (m) => `출발 준비! 내 담당 키: ${m.all}\n${m.n > 1 ? '친구들과 키를 나눠 맡았어요. 서로 호흡을 맞춰 보세요!' : '혼자서 키를 모두 맡았어요.'}`,
+  wheels: () => 'Q = 왼쪽 바퀴 전진, W = 오른쪽 바퀴 전진. 둘 다 누르면 직진!\nA · S 는 같은 쪽 바퀴 후진. Q만 누르면 오른쪽, W만 누르면 왼쪽으로 꺾여요.',
+  turn: () => '길이 꺾여요! 스페이스(브레이크)로 속도를 줄이고\n한쪽 바퀴만 굴려서 방향을 바꾸세요. 길 밖으로 떨어지면 폭발!',
   fuel: () => '착지해서 가만히 서 있거나 굴러가면 연료가 충전됩니다 (지면 초당 약 8%).\n초록색 충전 구역에는 장애물이 없어요.',
-  single: (m) => `배출구 키${m.exh ? ` (${m.exh})` : ''}를 한 개만 눌러 보세요.\n그쪽 모서리만 위로 들리며 차가 크게 기웁니다. 연료가 줄어드는 걸 보세요.`,
-  lift: () => '배출구를 둘 이상 동시에 누르면 이륙합니다!\n낮은 장벽을 날아서 넘어 보세요. 착지는 안전해요.',
-  four: () => '네 개를 모두 누르면 수평으로 안정적으로 상승합니다 (연료는 4배로 빨리 닳아요).\n짧게 끊어 누르며 높이를 조절하세요.',
+  single: (m) => `배출구 키${m.exh ? ` (${m.exh})` : ''}를 한 개만 눌러 보세요.\n그쪽 모서리만 위로 들리며 차가 크게 기웁니다.`,
+  lift: () => '배출구를 둘 이상 동시에 누르면 이륙합니다!\n낮은 장벽을 날아서 넘어 보세요.',
+  four: () => '네 개를 모두 누르면 수평으로 상승합니다 (연료가 약 2.5초 만에 바닥나요).\n짧게 끊어 누르며 높이를 조절하세요.',
   tilt: () => '앞쪽 배출구를 누르면 차가 뒤로 밀리고, 뒤쪽을 누르면 앞으로 나아갑니다.\n"어디를 눌러 기울여서 어디로 날아가느냐"가 핵심 기술!',
-  tiltgap: () => '도로가 끊겼어요! 달려서 속도를 낸 뒤 날아서 건너세요.\n뒤쪽 배출구로 앞으로 기울이면 앞으로 나아갑니다.',
-  free: () => '체크포인트(청록 게이트)를 지나면 부활 지점이 저장됩니다.\n폭발해도 2.5초 뒤 마지막 체크포인트에서 연료 100%로 부활!',
+  tiltgap: () => '길이 끊겼어요! 달려서 속도를 낸 뒤 날아서 건너세요.\n뒤쪽 배출구로 앞으로 기울이면 앞으로 나아갑니다.',
+  free: () => '체크포인트(청록 게이트)를 지나면 부활 지점이 저장됩니다.\n이제부터 길이 구불구불하고 좁아져요. 꺾이는 곳에서는 미리 감속!',
 };
 
 export class UI {
@@ -101,9 +103,21 @@ export class UI {
     $('btn-copy').onclick = () => { const c = $('lobby-code').textContent; (navigator.clipboard ? navigator.clipboard.writeText(c) : Promise.reject()).then(() => this.lobbyMsg('방 코드를 복사했어요'), () => this.lobbyMsg('복사할 수 없어요. 직접 알려 주세요: ' + c)); };
     $('btn-again').onclick = () => h.again();
     $('btn-quit').onclick = () => h.leave();
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.toggleSettings($('modal-settings').classList.contains('hidden')); });
+    // 게임 중 메뉴 (☰ 버튼 / Esc)
+    $('btn-menu').onclick = () => this.togglePause(true);
+    $('pm-resume').onclick = () => this.togglePause(false);
+    $('pm-settings').onclick = () => { this.togglePause(false); this.toggleSettings(true); };
+    $('pm-lobby').onclick = () => { this.togglePause(false); h.toLobby(); };
+    $('pm-quit').onclick = () => { this.togglePause(false); h.leave(); };
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('modal-settings').classList.contains('hidden')) return this.toggleSettings(false);
+      if (h.inGame()) return this.togglePause($('modal-pause').classList.contains('hidden'));
+      this.toggleSettings(true);
+    });
   }
   toggleSettings(on) { $('modal-settings').classList.toggle('hidden', !on); this.h.settingsOpen(on); }
+  togglePause(on) { $('modal-pause').classList.toggle('hidden', !on); this.h.settingsOpen(on); }
   syncCamera() { $('set-cam').value = this.settings.camera || 'chase'; }
   menuMsg(t) { $('menu-msg').textContent = t || ''; }
   lobbyMsg(t) { const el = $('lobby-warn'); el.textContent = t; el.classList.remove('warn'); }
@@ -150,7 +164,7 @@ export class UI {
     const wheels = maskToKeys(mine & 0x0f).map((k) => k.toUpperCase()).join(' '), exh = maskToKeys(mine & 0xf0).map((k) => k.toUpperCase()).join(' ');
     this.info = { all: ks.join(' '), wheels, exh, n: init.n };
     $('keys-who').textContent = `(${ks.join(' ')})`;
-    document.querySelectorAll('#hud-keys .cap').forEach((c) => { const b = 'qwaserdf'.indexOf(c.dataset.k); c.classList.toggle('mine', !!(mine & (1 << b))); c.classList.remove('on'); });
+    document.querySelectorAll('#hud-keys .cap').forEach((c) => { const b = KEYS9.indexOf(c.dataset.k); c.classList.toggle('mine', !!(mine & (1 << b))); c.classList.remove('on'); });
     document.querySelectorAll('#carmap .ex').forEach((c) => { const i = +c.dataset.i; c.classList.toggle('mine', !!(mine & (16 << i))); c.classList.remove('on'); });
     this.renderPlayers(null);
     const t = $('prog-ticks'); t.innerHTML = '';
@@ -184,10 +198,11 @@ export class UI {
     set('sec', si + ':' + st.cp, () => { const s = map.sections[Math.max(0, si - 1)]; $('sec-name').textContent = `구간 ${s.idx}/${map.sections.length} · ${s.name}   ·   체크포인트 ${st.cp + 1}/${map.checkpoints.length}`; this.ticks.forEach((t, i) => t.classList.toggle('done', i <= st.cp)); });
     // 키 UI: 내가 누른 키는 즉시 켜짐
     set('keys', v.pressed + ':' + st.ex + ':' + st.k.join(','), () => {
-      document.querySelectorAll('#hud-keys .cap').forEach((c) => { const b = 'qwaserdf'.indexOf(c.dataset.k); c.classList.toggle('on', !!(v.pressed & (1 << b))); });
+      document.querySelectorAll('#hud-keys .cap').forEach((c) => { const b = KEYS9.indexOf(c.dataset.k); c.classList.toggle('on', !!(v.pressed & (1 << b))); });
       const all = st.k.reduce((a, b) => a | b, 0) | v.pressed;
       document.querySelectorAll('#carmap .ex').forEach((c) => c.classList.toggle('on', !!((st.ex | (v.pressed >> 4 & 15)) & (1 << +c.dataset.i)) && v.alive));
-      document.querySelectorAll('#carmap .wh').forEach((c) => c.classList.toggle('on', !!(all & (1 << +c.dataset.i))));
+      // 바퀴 표시: 왼쪽(0,2) = Q/A, 오른쪽(1,3) = W/S
+      document.querySelectorAll('#carmap .wh').forEach((c) => { const left = +c.dataset.i % 2 === 0; c.classList.toggle('on', !!(all & (left ? 5 : 10))); });
     });
   }
   hint(key) {

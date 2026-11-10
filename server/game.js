@@ -22,19 +22,22 @@ export class Game {
     this.T = 0; this.elapsed = 0;
     this.phase = PHASE.COUNTDOWN; this.countdown = CFG.RULES.countdown;
     this.cp = 0; this.deaths = 0; this.invuln = 0; this.deadTimer = 0; this.god = false;
+    this.progress = 0;           // 경로를 따라 간 거리 (위아래로 겹친 경로에서 앞쪽으로 건너뛰지 않게 연속성을 유지)
     this.events = [];
     this.result = null;
     this.respawnAt(0);
   }
-  respawnAt(i) {
-    const cp = this.map.checkpoints[i];
-    const z = -(cp.s + 1.5);
-    let gy = this.world.groundY(cp.x, z);
-    if (!Number.isFinite(gy)) gy = 0;
-    this.sim.spawn(cp.x, gy + 0.56, z, 0);
+  // 경로 위 s 지점에 경로 방향으로 차를 놓는다
+  placeAt(s) {
+    const tr = this.world.track;
+    if (!tr) { let gy = this.world.groundY(0, -s); if (!Number.isFinite(gy)) gy = 0; this.sim.spawn(0, gy + 0.56, -s, 0); this.progress = s; return; }
+    const p = tr.point(s, 0, 0);
+    this.sim.spawn(p[0], p[1] + 0.56, p[2], -tr.headingAt(s));
+    this.progress = s;
   }
-  // 서버가 각 플레이어에게 허용된 키만 받는다 (치팅 방지)
-  setKeys(slot, mask) { if (slot >= 0 && slot < this.n) this.keys[slot] = (mask & 0xff) & this.layout[slot]; }
+  respawnAt(i) { this.placeAt(this.map.checkpoints[i].s + 1.5); }
+  // 서버가 각 플레이어에게 허용된 키만 받는다 (치팅 방지). 9비트: 바퀴 4 + 배출구 4 + 브레이크
+  setKeys(slot, mask) { if (slot >= 0 && slot < this.n) this.keys[slot] = (mask & 0x1ff) & this.layout[slot]; }
   setSuicide(slot, down) { if (slot >= 0 && slot < this.n) { this.holdDown[slot] = !!down; if (!down) this.hold[slot] = 0; } }
   clearKeys(slot) { this.keys[slot] = 0; this.holdDown[slot] = false; this.hold[slot] = 0; }
   combined() { let m = 0; for (const k of this.keys) m |= k; return m; }
@@ -66,8 +69,13 @@ export class Game {
     this.T += dt;
     if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
     if (hit) { this.explode(hit.tag, hit.src ? hit.src.type : null); return; }
-    // 체크포인트 / 도착
-    const s = -this.sim.car.p[2], cps = this.map.checkpoints;
+    // 경로 진행 거리 → 체크포인트 / 도착
+    const c = this.sim.car;
+    if (this.world.track) {
+      const L = this.world.locate(c.p[0], c.p[1], c.p[2], this.progress);
+      if (L && L.s - this.progress < 70 && L.s - this.progress > -70) this.progress = L.s;
+    } else this.progress = -c.p[2];
+    const s = this.progress, cps = this.map.checkpoints;
     while (this.cp + 1 < cps.length && s >= cps[this.cp + 1].s) {
       this.cp++;
       this.events.push({ t: 'cp', i: this.cp, time: +this.elapsed.toFixed(2) });
@@ -100,8 +108,7 @@ export class Game {
     let k = 0;
     for (let i = 0; i < cps.length; i++) if (cps[i].s <= s) k = i;
     this.cp = k;
-    let gy = this.world.groundY(0, -s); if (!Number.isFinite(gy)) gy = 0;
-    this.sim.spawn(0, gy + 0.56, -s, 0);
+    this.placeAt(s);
     this.invuln = 3;
     if (this.phase === PHASE.DEAD) this.phase = PHASE.RUNNING;
     this.events.push({ t: 'tp', s });
@@ -117,7 +124,7 @@ export class Game {
       p: [r2(c.p[0]), r2(c.p[1]), r2(c.p[2])], q: [r4(c.q[0]), r4(c.q[1]), r4(c.q[2]), r4(c.q[3])], v: [r2(c.v[0]), r2(c.v[1]), r2(c.v[2])],
       f: Math.round(this.sim.fuel * 10) / 10, lk: this.sim.lock ? 1 : 0, ex: this.sim.exFiring, k: this.keys.slice(),
       cp: this.cp, d: this.deaths, el: Math.round(this.elapsed * 100) / 100, inv: this.invuln > 0 || this.god ? 1 : 0,
-      cd: this.phase === PHASE.COUNTDOWN ? Math.ceil(this.countdown) : 0, g: this.sim.grounded ? 1 : 0,
+      cd: this.phase === PHASE.COUNTDOWN ? Math.ceil(this.countdown) : 0, g: this.sim.grounded ? 1 : 0, s: Math.round(this.progress * 10) / 10,
     };
   }
 }

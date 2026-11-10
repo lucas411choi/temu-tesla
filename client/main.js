@@ -52,6 +52,8 @@ const handlers = {
   quality: (q) => { if (engine) engine.setQuality(q); },
   auto: () => {}, camera: (m) => { ui.settings.camera = m; ui.save(); if (engine) engine.setCamMode(m); ui.toast(m === 'chase' ? '시점: 추격(그란 투리스모식)' : '시점: 탑뷰', false); ui.syncCamera(); }, volume: (v) => audio.setVolume(v), mute: (m) => audio.setMuted(m),
   settingsOpen: (on) => { if (input) input.enable(!on && inGame); },
+  inGame: () => inGame,
+  toLobby() { net.send('room:toLobby'); },
 };
 function goScreen(n) {
   screenName = n; ui.screen(n);
@@ -142,9 +144,12 @@ function frame(nowMs) {
   const st = interp.get(now, paused);
   if (!st) { ui.centerMsg('연결 중…', true); return; }
   lastStateObj = st;
-  const alive = st.ph !== 2, sCar = Math.max(0, -st.p[2]);
-  let gy = world.groundY(st.p[0], st.p[2]); if (!Number.isFinite(gy)) gy = world.refY(st.p[2]);
-  const alt = Math.max(0, st.p[1] - world.refY(st.p[2]));
+  const alive = st.ph !== 2, sCar = Math.max(0, st.s !== undefined ? st.s : -st.p[2]);
+  // 경로 노면 높이(고도 기준) / 바로 아래 지면(그림자). 낭떠러지 위면 바닥까지
+  const road = world.track ? world.track.locate(st.p[0], st.p[1], st.p[2], sCar) : null;
+  const roadY = road ? road.y : 0;
+  let gy = world.groundY(st.p[0], st.p[1] + 0.5, st.p[2]); if (!Number.isFinite(gy)) gy = map.floorY !== undefined ? map.floorY : roadY;
+  const alt = Math.max(0, st.p[1] - roadY);
   const slow = fx.slowmo > 0 ? 0.25 : 1;
   const sec = map.sections.find((s) => sCar >= s.s0 && sCar < s.s1) || map.sections[map.sections.length - 1], secIdx = sec.idx;
   const ceilY = world.ceilAt(sCar), indoor = ceilY > 0 && (sec.theme.style === 'tunnel' || sec.theme.style === 'haunt');
@@ -157,10 +162,11 @@ function frame(nowMs) {
   const camPos = engine.camera.position;
   if (engine.envNow.rain > 0.05) fx.rain([camPos.x, camPos.y, camPos.z], engine.envNow.rain);
   // 불타는 차 / 전선 스파크는 가까울 때만
-  for (const f of city.fires) if (Math.abs(f[2] - st.p[2]) < 70 && Math.random() < 0.6) fx.flame([f[0], f[1] - 0.2, f[2]], 1.0, 2.2);
-  for (const sp of city.sparks) if (Math.abs(sp[2] - st.p[2]) < 60 && Math.random() < 0.04) fx.spark([sp[3] + Math.random() * (sp[4] - sp[3]), sp[1], sp[2]], 3, 4);
+  const near = (p, r) => Math.abs(p[0] - st.p[0]) < r && Math.abs(p[2] - st.p[2]) < r;
+  for (const f of city.fires) if (near(f, 70) && Math.random() < 0.6) fx.flame([f[0], f[1] - 0.2, f[2]], 1.0, 2.2);
+  for (const sp of city.sparks) if (near(sp[0], 60) && Math.random() < 0.04) { const k = Math.random(), a = sp[0], b = sp[1]; fx.spark([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], 3, 4); }
   fx.update(paused ? 0 : dt * slow);
-  engine.updateCamera(dt, { p: st.p, v: st.v, q: st.q, alt }, fx, { wall: world.wallHalf(st.p[2]), ceil: ceilY, ground: gy });
+  engine.updateCamera(dt, { p: st.p, v: st.v, q: st.q, alt }, fx, { wall: Infinity, ceil: ceilY, ground: Math.max(gy, roadY - 30), roadYaw: world.track ? -world.track.headingAt(sCar) : 0 });
   engine.updateLamps(city.lamps, { x: st.p[0], z: st.p[2] });
   engine.flashLight.position.set(fx.flashPos[0], fx.flashPos[1] + 3, fx.flashPos[2]); engine.flashLight.intensity = fx.flash * 9000;
   if (debug) debug.update(dt, st, st.T);
@@ -175,7 +181,7 @@ function frame(nowMs) {
   if (st.cd > 0 && st.cd !== frame.lastCd) { frame.lastCd = st.cd; audio.tick(); }
   ui.setSuicide(input.suicide && alive ? (now - suicideStart) / CFG.RULES.suicideHold : 0);
   audio.tension = secIdx / map.sections.length;
-  audio.update({ ex: st.ex | localEx, wheels: pop(input.mask & 15), speed: Math.hypot(st.v[0], st.v[2]), grounded: st.g === 1, fuel: st.f, alive, car: st.p, hz: hazards.audio, rain: engine.envNow.rain, tunnel: indoor, now });
+  audio.update({ ex: st.ex | localEx, wheels: pop((input.mask | (input.mask >> 2)) & 3) * 2, speed: Math.hypot(st.v[0], st.v[2]), grounded: st.g === 1, fuel: st.f, alive, car: st.p, hz: hazards.audio, rain: engine.envNow.rain, tunnel: indoor, now });
   firstFrame = false;
 }
 

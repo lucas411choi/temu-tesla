@@ -5,8 +5,8 @@ import { buildPark } from './maps/park.js';
 const REGISTRY = { city: buildCity, park: buildPark };
 // 로비/차고에서 보여 줄 맵 정보
 export const MAP_INFO = {
-  city: { name: '도시', desc: '골목 → 도심 → 공사장 → 고가도로 → 네온 시장 → 공업 지구 → 현수교 → 터널 → 마천루 → 새벽 해안', len: 9000, sections: 10 },
-  park: { name: '놀이공원', desc: '정문 → 먹거리 거리 → 회전목마 → 롤러코스터 → 대관람차·바이킹 → 유령의 집 → 불꽃놀이 성', len: 6300, sections: 7 },
+  city: { name: '도시', desc: '튜토리얼 골목 → 도심 → 비계·크레인·공사 중인 건물 → 고가도로 → 시장 옥상 → 배관 위 → 현수교 → 터널 → 유리 다리 → 해안 부두', len: 6500, sections: 10 },
+  park: { name: '놀이공원', desc: '정문 → 먹거리 거리 → 회전목마 → 코스터 레일 위 주행 → 대관람차·바이킹 → 유령의 집 → 성벽 길', len: 4150, sections: 7 },
 };
 const cache = {};
 export function getMap(id = 'city') {

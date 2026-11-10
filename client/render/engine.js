@@ -201,10 +201,11 @@ export class Engine {
   }
 
   // 맵마다 다른 시간대 키프레임
-  setEnvKeys(keys) { this.envKeys = keys && keys.length ? keys : ENV_KEYS; }
+  setEnvKeys(keys) { this.envKeys = keys && keys.length ? keys : ENV_KEYS.map((q) => ({ ...q, s: q.s !== undefined ? q.s : q.at * 6000 })); }
   // 진행 거리 s 에 따른 하늘/안개/조명/창문 밝기 보간
   applyEnv(s) {
-    const E = this.envKeys || ENV_KEYS;
+    if (!this.envKeys) this.setEnvKeys(null);
+    const E = this.envKeys;
     let a = E[0], b = E[E.length - 1];
     for (let i = 0; i < E.length - 1; i++) if (s >= E[i].s && s <= E[i + 1].s) { a = E[i]; b = E[i + 1]; break; }
     const t0 = b.s === a.s ? 0 : Math.min(1, Math.max(0, (s - a.s) / (b.s - a.s))), t = t0 * t0 * (3 - 2 * t0);
@@ -252,8 +253,9 @@ export class Engine {
   updateCamera(dt, car, fx, lim = {}) {
     const cam = this.cam, p = car.p, alt = Math.max(0, car.alt);
     if (this.camMode === 'top') {
-      const ahead = 9 + Math.min(8, Math.abs(car.v[2]) * 0.4);
-      const tx = p[0] * 0.8, ty = Math.min(alt * 0.25, 10), tz = p[2] - ahead;
+      const sp = Math.hypot(car.v[0], car.v[2]), ahead = 9 + Math.min(8, sp * 0.4);
+      const hx = sp > 1 ? car.v[0] / sp : 0, hz = sp > 1 ? car.v[2] / sp : -1;
+      const tx = p[0] + hx * ahead, ty = p[1] - alt + Math.min(alt * 0.25, 10), tz = p[2] + hz * ahead;
       const k = cam.init ? 1 - Math.exp(-dt * 4.5) : 1;
       cam.target.x += (tx - cam.target.x) * k; cam.target.y += (ty - cam.target.y) * k; cam.target.z += (tz - cam.target.z) * k;
       cam.alt += (alt - cam.alt) * (cam.init ? 1 - Math.exp(-dt * 2.2) : 1);

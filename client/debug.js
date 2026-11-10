@@ -27,7 +27,7 @@ export class DebugTools {
     $('dbg-box').onchange = (e) => { this.show = e.target.checked; if (!this.show) this.hide(); };
     $('dbg-free').onchange = (e) => { this.free = e.target.checked; this.engine.cam.free = this.free; if (this.free) this.engine.camera.position.y += 0; };
     $('dbg-fuel').onclick = () => this.net.send('debug', { cmd: 'fuel' });
-    $('dbg-next').onclick = () => { const st = this.getState(); if (!st) return; const n = this.map.checkpoints.find((c) => c.s > -st.p[2] + 1); if (n) this.net.send('debug', { cmd: 'tp', s: n.s }); };
+    $('dbg-next').onclick = () => { const st = this.getState(); if (!st) return; const n = this.map.checkpoints.find((c) => c.s > (st.s !== undefined ? st.s : -st.p[2]) + 1); if (n) this.net.send('debug', { cmd: 'tp', s: n.s }); };
   }
   hide() { for (const m of this.pool) m.visible = false; }
   mesh(i, geo, mat) {
@@ -43,10 +43,10 @@ export class DebugTools {
       if (k.has('PageUp')) cam.position.y += sp; if (k.has('PageDown')) cam.position.y -= sp;
       cam.lookAt(cam.position.x, cam.position.y - 40, cam.position.z - 30);
     }
-    if (st) $('dbg-info').textContent = `s=${(-st.p[2]).toFixed(0)}m  y=${st.p[1].toFixed(1)}  T=${st.T.toFixed(1)}s`;
+    if (st) $('dbg-info').textContent = `s=${(st.s !== undefined ? st.s : -st.p[2]).toFixed(0)}m  y=${st.p[1].toFixed(1)}  T=${st.T.toFixed(1)}s`;
     if (!this.show || !st) return;
     this.world._stamp = (this.world._stamp || 0) + 1000000;
-    this.world.collect(st.p[2], T, this.out, 70);
+    if (this.world.track) this.world.collect(st.p[0], st.p[2], T, this.out, 70); else this.world.collect(st.p[2], T, this.out, 70);
     let n = 0;
     for (const s of this.out.slice(0, 160)) {
       if (s.lethal === false) continue;

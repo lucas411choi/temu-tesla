@@ -35,9 +35,9 @@ const mv = (M, v) => [M[0] * v[0] + M[1] * v[1] + M[2] * v[2], M[3] * v[0] + M[4
 const cr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 // 차 고도 (도로면 기준)
-export function altitude(c, world) { return c.p[1] - world.refY(c.p[2]); }
+export function altitude(c, world) { return c.p[1] - world.refY(c.p[0], c.p[1], c.p[2]); }
 
-// 한 서브스텝 진행. inp = { whl:[4 bool], exh:[4 bool] }  (연료 처리는 호출자가 이미 반영)
+// 한 서브스텝 진행. inp = { whl:[4 구동 명령 -1/0/1 (좌앞,우앞,좌뒤,우뒤)], exh:[4 bool], brake: bool }  (연료 처리는 호출자가 이미 반영)
 export function stepCar(c, inp, dt, world) {
   const P = CFG.CAR, W = CFG.WHEEL, m = P.mass, g = CFG.G;
   const R = qToMat3(c.q);
@@ -52,7 +52,7 @@ export function stepCar(c, inp, dt, world) {
   Fx -= kd * vel[0]; Fy -= kd * vel[1]; Fz -= kd * vel[2];
 
   // 2) 배출구 추력 (모서리마다 차체 위쪽 방향, 최대 고도에서 부드럽게 감소)
-  const alt = c.p[1] - world.refY(c.p[2]);
+  const alt = c.p[1] - world.refY(c.p[0], c.p[1], c.p[2]);
   const fade = 1 - smoothstep(CFG.THRUST.fadeStart, CFG.THRUST.fadeEnd, alt);
   const hiAir = smoothstep(CFG.THRUST.ceilStart, CFG.THRUST.ceilEnd, alt);
   if (hiAir > 0) Fy -= CFG.THRUST.ceilDrag * hiAir * vel[1];
@@ -74,15 +74,15 @@ export function stepCar(c, inp, dt, world) {
 
   // 3) 바퀴 (지면에 닿은 바퀴만 힘을 만든다. 공중/뒤집힘에서는 효과 없음)
   c.wheelsDown = 0;
-  const anyDrive = inp.whl[0] || inp.whl[1] || inp.whl[2] || inp.whl[3];
+  const anyDrive = inp.whl[0] || inp.whl[1] || inp.whl[2] || inp.whl[3], brake = !!inp.brake;
   let fl = Math.hypot(fwdW[0], fwdW[2]);
   const hasDir = fl > 0.25;
   const fx0 = hasDir ? fwdW[0] / fl : 0, fz0 = hasDir ? fwdW[2] / fl : -1;
   for (let i = 0; i < 4; i++) {
-    const tgt = inp.whl[i] ? 1 : 0;
+    const tgt = inp.whl[i] || 0;
     c.drv[i] += (tgt - c.drv[i]) * (1 - Math.exp(-dt / W.spool));
     const r = m3MulV(R, P.wheelPts[i]);
-    const gy = world.groundY(c.p[0] + r[0], c.p[2] + r[2]);
+    const gy = world.groundY(c.p[0] + r[0], c.p[1] + r[1], c.p[2] + r[2]);
     const depth = gy - (c.p[1] + r[1]);
     if (!(depth > 0) || up[1] < 0.2) continue;
     c.wheelsDown++;
@@ -97,10 +97,14 @@ export function stepCar(c, inp, dt, world) {
     const yawLat = (w[1] * r[2]) * lx + (-w[1] * r[0]) * lz;
     const vlat = vlatRaw - W.yawSlip * yawLat;
     const flat = -N * clamp(W.latStiff * vlat, -W.muLat, W.muLat);
-    const vr = Math.max(0, vlong) / W.vmax;
-    let flong = W.drive * c.drv[i] * Math.max(0, 1 - vr * vr);
+    // 전진(+)/후진(-) 구동: 각 방향 최고속도에 가까워질수록 구동력이 줄어든다
+    const d = c.drv[i];
+    let flong = 0;
+    if (d > 0) { const vr = Math.max(0, vlong) / W.vmax; flong = W.drive * d * Math.max(0, 1 - vr * vr); }
+    else if (d < 0) { const vr = Math.max(0, -vlong) / W.vrev; flong = W.drive * d * Math.max(0, 1 - vr * vr); }
     flong -= W.roll * N * Math.tanh(vlong * 3);
     if (!anyDrive) flong -= (m * W.coast / 4) * Math.tanh(vlong * 2.5);
+    if (brake) flong -= W.brake * Math.tanh(vlong * 4);
     flong = clamp(flong, -W.muLong * N, W.muLong * N);
     const fxx = flat * lx + flong * fx0, fzz = flat * lz + flong * fz0, fyy = N;
     Fx += fxx; Fy += fyy; Fz += fzz;
@@ -143,7 +147,7 @@ function solveHull(c, R, dt, world) {
   const pts = P.hullPts, act = [];
   for (let i = 0; i < pts.length; i++) {
     const r = m3MulV(R, pts[i]);
-    const gy = world.groundY(c.p[0] + r[0], c.p[2] + r[2]);
+    const gy = world.groundY(c.p[0] + r[0], c.p[1] + r[1], c.p[2] + r[2]);
     const depth = gy - (c.p[1] + r[1]);
     if (depth > -0.005) act.push({ r, depth });
   }

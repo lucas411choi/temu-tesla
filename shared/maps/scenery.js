@@ -1,189 +1,150 @@
-// 구간별 주변 풍경(도로 밖) 배치. 모두 "보이는 것 = 충돌" 원칙을 지킨다.
-//  - 옆벽(ground.wall) 반공간이 막고 있는 높이(wallTop)까지는 별도 충돌체가 필요 없고,
-//    그보다 높거나 옆벽이 없는 곳(고가도로/다리)의 구조물은 충돌 상자를 따로 만든다.
-//  - 구간이 바뀌는 경계에는 '이음 풍경'(공원, 공사장 정문, 진입로, 시장 정문, 부두, 터널 입구 ...)을 둬서 자연스럽게 넘어간다.
+// 경로 주변 풍경. 경로가 다 만들어진 뒤(B.scenery 작업으로) 실행되어, 경로(노면 판)와 다른 풍경에 겹치지 않는 자리에만 놓는다.
+// 모든 구조물은 보이는 그대로 충돌 상자를 가진다. 바닥은 floorY (경로보다 한참 아래).
 import { makeBox } from '../collision.js';
+import { rectOverlap } from './lib.js';
 
 const solid = (B, s, x, y, hx, hy, hz, tag = 'building') => { const b = makeBox(x, y, -s, hx, hy, hz); b.tag = tag; b.sec = B.cur; B.statics.push(b); return b; };
+// 피스 p 위 로컬 사각형(s 중심, x 중심, 반길이 a(진행 방향), 반폭 w(옆 방향)) → 월드 사각형
+const worldRect = (p, s, x, a, w) => { const u = s - p.s0; return { cx: p.x0 + u * p.fx + x * p.rx, cz: p.z0 + u * p.fz + x * p.rz, fx: p.fx, fz: p.fz, rx: p.rx, rz: p.rz, a, w }; };
+const slabRect = (sl, m) => { const am = (sl.a0 + sl.a1) / 2; return { cx: sl.x0 + am * sl.fx, cz: sl.z0 + am * sl.fz, fx: sl.fx, fz: sl.fz, rx: sl.rx, rz: sl.rz, a: (sl.a1 - sl.a0) / 2 + m, w: sl.w + m }; };
 
-// ───────── 골목 상가 (저층 상가·주택, 어닝/세로 간판/에어컨 실외기) ─────────
-export function alleyScene(B, s0, s1, o = {}) {
-  const rng = B.rng;
-  B.ground(s0, s1, { wallTop: 11 });
-  for (const side of [-1, 1]) {
-    let s = s0 - rng.range(0, 6);
-    while (s < s1) {
-      const w = Math.min(rng.range(8, 15), s1 - s + 4);
-      B.building(s + w / 2, side, w, rng.range(10, 16), rng.range(11, 21), { style: 'house', flat: true, tex: rng.chance(0.6) ? 2 : 1, shop: true });
-      s += w;
-    }
+// 이 자리(월드 사각형 R)가 비었는가: 경로 판(여유 m) / 이미 놓은 풍경과 겹치지 않음
+export function free(B, track, R, m = 0.8) {
+  const ext = Math.abs(R.a * R.fx) + Math.abs(R.w * R.rx) + 2, ezt = Math.abs(R.a * R.fz) + Math.abs(R.w * R.rz) + 2;
+  for (const sl of track.slabs) {
+    if (sl.box[1] + m < R.cx - ext || sl.box[0] - m > R.cx + ext || sl.box[3] + m < R.cz - ezt || sl.box[2] - m > R.cz + ezt) continue;
+    if (rectOverlap(slabRect(sl, m), R)) return false;
   }
-  // 전봇대 + 전선 (인도 끝, 충돌 포함). 전선은 같은 쪽 전봇대 사이를 잇는다.
-  for (const side of [-1, 1]) {
-    let prev = null;
-    for (let s = s0 + 18 + (side > 0 ? 23 : 0); s < s1 - 6; s += 46) {
-      solid(B, s, side * 16.1, 4.6, 0.18, 4.6, 0.18, 'pole');
-      if (prev !== null) solid(B, (prev + s) / 2, side * 16.1, 8.3, 0.05, 0.05, (s - prev) / 2, 'wire');
-      B.add('pole', { s, side, prev });
-      prev = s;
-    }
+  for (const F of B.foot) {
+    if (Math.abs(F.cx - R.cx) > F.rad + ext + 2 || Math.abs(F.cz - R.cz) > F.rad + ezt + 2) continue;
+    if (rectOverlap(F, R)) return false;
   }
+  return true;
 }
+const claim = (B, R) => { R.rad = Math.hypot(R.a, R.w); B.foot.push(R); };
 
-// ───────── 동네 공원 (골목 → 도심 사이 이음) : 도로가 넓은 광장으로 열리고, 둘레는 건물이 감싼다 ─────────
-export function parkScene(B, s0, s1, o = {}) {
-  const rng = B.rng, half = o.half || 40;
-  B.ground(s0, s1, { half, wall: half, wallTop: Infinity, surf: 'park' });
-  for (const side of [-1, 1]) {
-    // 공원을 둘러싼 건물 (x0 = half)
-    let s = s0 - 4;
-    while (s < s1 + 4) { const w = rng.range(14, 22); B.building(s + w / 2, side, w, 24, rng.range(46, 80), { x0: half + 0.5, style: 'office', tex: 1 }); s += w; }
-    // 가로수 두 줄
-    for (let s2 = s0 + 6; s2 < s1 - 4; s2 += 11) { B.tree(s2 + rng.range(-1.5, 1.5), side, { x: rng.range(21, 26), kind: 'park' }); B.tree(s2 + 5 + rng.range(-1.5, 1.5), side, { x: rng.range(31, 36), kind: 'park' }); }
-    // 벤치
-    for (let s2 = s0 + 10; s2 < s1 - 6; s2 += 16) { solid(B, s2, side * 18.6, 0.45, 0.4, 0.45, 1.1, 'bench'); B.add('bench', { s: s2, x: side * 18.6 }); }
-  }
-  // 분수 (한쪽)
-  const fs = (s0 + s1) / 2, fx = (o.fountainSide || 1) * 28;
-  solid(B, fs, fx, 1.0, 4.2, 1.0, 4.2, 'fountain'); solid(B, fs, fx, 3.2, 0.7, 2.2, 0.7, 'fountain');
-  B.add('fountain', { s: fs, x: fx });
-  B.add('parkgate', { s: s0 + 1, half });
-  B.add('parkgate', { s: s1 - 1, half });
-  B.add('lawn', { s0, s1, half });
-}
-
-// ───────── 도심 업무지구 (유리 오피스 타워) ─────────
-export function downtownScene(B, s0, s1, o = {}) {
-  for (const side of [-1, 1]) B.buildingRow(s0, s1, side, { style: 'office', hmin: 52, hmax: 150, neon: 0.25, skip: o.skip || [] });
-}
-
-// ───────── 공사장: 아파트 대신 '짓다 만 철골·콘크리트 골조' + 비계 + 안전망 + 타워크레인 ─────────
-export function siteScene(B, s0, s1, o = {}) {
-  const rng = B.rng;
-  for (const side of [-1, 1]) {
-    let s = s0;
-    while (s < s1) {
-      const w = Math.min(rng.range(22, 36), s1 - s + 6), h = rng.range(48, 84), floors = Math.round(h / 3.6);
-      B.add('skel', { s: s + w / 2, side, w: w - 1.5, d: rng.range(22, 34), h, floors, done: rng.range(0.25, 0.8), net: rng.chance(0.7), seed: Math.floor(rng() * 1e9) });
-      s += w;
-    }
-  }
-  // 현장 펜스 아래 단 (보도 쪽 가림막) — 장식
-  B.add('hoard', { s0, s1 });
-}
-
-// ───────── 고가도로: 아래로 내려다보이는 도시 (도로 아래 16m) + 멀리 떨어진 타워 ─────────
-export function highwayScene(B, s0, s1) {
-  const rng = B.rng;
-  B.add('lowcity', { s0, s1, y: -16 });
-  for (const side of [-1, 1]) {
-    let s = s0 - 10;
-    while (s < s1 + 10) {
-      const w = rng.range(26, 46), x0 = rng.range(46, 70), h = rng.range(40, 120);
-      // 아래 지면(-16)부터 솟은 빌딩: 옆벽이 없는 구간이라 building()이 충돌 상자를 함께 만든다
-      B.building(s + w / 2, side, w, rng.range(26, 40), h + 16, { x0, base: -16, style: 'office', tex: rng.int(0, 1), neon: 0.2 });
-      s += w + rng.range(4, 22);
-    }
-  }
-  // 고가 교각(도로 아래)
-  for (let s = s0 + 8; s < s1; s += 36) B.add('pier', { s, y: -16 });
-}
-
-// ───────── 네온 골목 시장 (빽빽한 중층 건물 + 돌출 네온 간판) ─────────
-export function marketScene(B, s0, s1) {
-  for (const side of [-1, 1]) B.buildingRow(s0, s1, side, { style: 'neon', tex: 3, hmin: 46, hmax: 78, wmin: 12, wmax: 22, neon: 0.95 });
-  for (let s = s0 + 10; s < s1; s += 23) B.add('neonsign', { s, side: (Math.floor(s / 23) % 2) ? 1 : -1, hue: Math.floor(B.rng() * 360), y: B.rng.range(5, 14) });
-}
-
-// ───────── 공업 지구: 14m 높이의 공장 담/배관벽 + 뒤쪽 저장 탱크·굴뚝 (충돌 상자 포함) ─────────
-export function industrialScene(B, s0, s1) {
-  const rng = B.rng;
-  B.ground(s0, s1, { wallTop: 14 });
-  B.add('plantwall', { s0, s1, h: 14 });
-  for (const side of [-1, 1]) {
-    for (let s = s0 + rng.range(10, 30); s < s1 - 10; s += rng.range(55, 85)) {
-      const kind = rng.chance(0.55) ? 'tank' : 'stack';
-      if (kind === 'tank') {
-        const r = rng.range(7, 11), h = rng.range(20, 34), x = side * (17.5 + r + rng.range(0, 6));
-        solid(B, s, x, h / 2, r * 0.92, h / 2, r * 0.92, 'tank');
-        B.add('tank', { s, x, r, h, hue: rng.pick([0, 30, 200, 120]) });
-      } else {
-        const r = rng.range(1.6, 2.6), h = rng.range(55, 90), x = side * (19 + rng.range(0, 8));
-        solid(B, s, x, h / 2, r, h / 2, r, 'stack');
-        B.add('stack', { s, x, r, h });
+// 조각 p 의 [a, b] 구간 양옆에 '빈틈 없는 건물 줄'. o: { gap(길 가장자리~건물), hmin, hmax(노면 위 높이), wmin,wmax, dmin,dmax, style, tex, flat, neon, shop, sides }
+export function rowsAlong(B, track, s0, s1, o = {}) {
+  const rng = B.rng, floor = B.floorY;
+  for (const p of track.pieces) {
+    if (!p.solid || p.L < 6) continue;
+    const a0 = Math.max(s0, p.s0 + (o.trim || 0)), a1 = Math.min(s1, p.s0 + p.L - (o.trim || 0));
+    if (a1 - a0 < 6) continue;
+    for (const side of o.sides || [-1, 1]) {
+      let s = a0;
+      while (s < a1 - 3) {
+        const w = Math.min(rng.range(o.wmin || 14, o.wmax || 30), a1 - s);
+        let d = rng.range(o.dmin || 18, o.dmax || 36);
+        const x0 = p.w + (o.gap !== undefined ? o.gap : 0.6) + (o.jitter ? rng() * o.jitter : 0);
+        const sc = s + w / 2;
+        let R = worldRect(p, sc, side * (x0 + d / 2), w / 2 - 0.3, d / 2);
+        if (!free(B, track, R)) { d *= 0.45; R = worldRect(p, sc, side * (x0 + d / 2), w / 2 - 0.3, d / 2); }
+        if (d > 5 && free(B, track, R)) {
+          const surf = p.y0 + (p.y1 - p.y0) * ((sc - p.s0) / p.L);
+          const top = rng.range(o.hmin || 30, o.hmax || 90), base = floor - surf;
+          const dd = B.building(sc, side, w, d, top - base, { x0, base, style: o.style, tex: o.tex, flat: o.flat, neon: o.neon, shop: o.shop });
+          if (o.hue !== undefined) dd.hue = o.hue + Math.floor(rng() * 60);
+          if (o.food) dd.food = rng.pick(o.food);
+          claim(B, R);
+        }
+        s += w;
       }
     }
   }
 }
 
-// ───────── 부두 (공업 지구 → 다리 사이 이음): 컨테이너 더미 + 갠트리 크레인 ─────────
-export function dockScene(B, s0, s1) {
+// 흩어 놓기: 조각마다 양옆 거리 [near, far] 에 kind 를 make(s, x, side) 로 만든다 (반크기 hw)
+export function scatter(B, track, s0, s1, o, make) {
   const rng = B.rng;
-  B.ground(s0, s1, { wallTop: 10.4 });
-  // 컨테이너 4단(10.4m)이 빈틈 없이 = 옆벽 높이와 같다
-  for (const side of [-1, 1]) for (let s = s0; s < s1; s += 6.4) B.add('containers', { s: s + 3.2, x: side * 17.9, n: 4, seed: Math.floor(rng() * 1e6) });
-  // 갠트리 크레인(뒤쪽, 충돌 포함)
-  const gs = (s0 + s1) / 2;
-  for (const side of [-1, 1]) {
-    for (const dz of [-7, 7]) solid(B, gs + dz, side * 27, 21, 0.8, 21, 0.8, 'crane');
-    solid(B, gs, side * 27, 41, 1.2, 1.4, 8, 'crane');
-  }
-  B.add('gantry', { s: gs, x: 27 });
-}
-
-// ───────── 강 위의 현수교: 주탑(충돌) + 주케이블/행어(행어는 충돌 커튼) ─────────
-export function bridgeScene(B, s0, s1, towers) {
-  const H = 58;
-  for (const ts of towers) for (const side of [-1, 1]) { solid(B, ts, side * 15.6, H / 2, 1.3, H / 2, 1.6, 'tower'); }
-  for (const ts of towers) B.add('btower', { s: ts, H });
-  // 주케이블: 주탑 사이를 늘어지게. 행어 커튼(x=±15.2)을 10m 단위 충돌 상자로
-  const pts = [s0 - 40, ...towers, s1 + 40];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i], b = pts[i + 1];
-    B.add('bcable', { s0: a, s1: b, H, lo: 7, endA: i === 0, endB: i === pts.length - 2 });
-    for (let s = a + 5; s < b - 4; s += 10) {
-      const u = (s - a) / (b - a), y = cableY(u, H, 7, i === 0, i === pts.length - 2);
-      for (const side of [-1, 1]) solid(B, s, side * 15.2, (y + 1.2) / 2, 0.08, (y - 1.2) / 2, 5, 'cable');
+  for (const p of track.pieces) {
+    if (p.L < 8) continue;
+    const a0 = Math.max(s0, p.s0), a1 = Math.min(s1, p.s0 + p.L);
+    for (let s = a0 + rng.range(2, o.every || 30); s < a1; s += rng.range((o.every || 30) * 0.6, (o.every || 30) * 1.3)) {
+      for (const side of [-1, 1]) {
+        if (rng() > (o.chance || 0.7)) continue;
+        const hw = o.hw || 4, x = side * (p.w + (o.near || 2) + hw + rng() * ((o.far || 20) - (o.near || 2)));
+        const R = worldRect(p, s, x, hw, hw);
+        if (!free(B, track, R, o.margin || 1.0)) continue;
+        make(s, x, side, p, hw); claim(B, R);
+      }
     }
   }
-  B.add('skyline', { s0, s1, dist: 260 });
+}
+
+const surfAt = (p, s) => p.y0 + (p.y1 - p.y0) * Math.max(0, Math.min(1, (s - p.s0) / p.L));
+
+// ───────── 테마별 ─────────
+export function cityScene(B, track, s0, s1, style, o = {}) {
+  const P = {
+    alley: { style: 'house', tex: 2, flat: true, hmin: 8, hmax: 18, wmin: 8, wmax: 14, dmin: 10, dmax: 16, shop: true },
+    city: { style: 'office', hmin: 40, hmax: 120, neon: 0.25 },
+    neon: { style: 'neon', tex: 3, hmin: 30, hmax: 60, wmin: 10, wmax: 20, neon: 0.95 },
+    canyon: { style: 'glass', tex: 0, hmin: 90, hmax: 200, wmin: 22, wmax: 40, neon: 0.5 },
+    dawn: { style: 'hotel', tex: 1, hmin: 30, hmax: 90, neon: 0.2 },
+    highway: { style: 'office', hmin: 20, hmax: 80, gap: 14, jitter: 18, neon: 0.2, wmin: 20, wmax: 36 },
+    park: { style: 'toon', tex: 4, hmin: 28, hmax: 50, wmin: 16, wmax: 28, neon: 0.6 },
+    stall: { style: 'stall', tex: 1, flat: true, hmin: 7, hmax: 12, wmin: 8, wmax: 13, dmin: 8, dmax: 12, shop: true, food: ['떡볶이', '츄러스', '솜사탕', '핫도그', '팝콘', '아이스크림', '닭꼬치', '와플', '탕후루', '레모네이드'] },
+    toon: { style: 'toon', tex: 1, flat: true, hmin: 10, hmax: 18, wmin: 9, wmax: 15, dmin: 12, dmax: 18, shop: true },
+    castle: { style: 'castle', tex: 5, hmin: 26, hmax: 44, wmin: 14, wmax: 26 },
+  }[style];
+  rowsAlong(B, track, s0, s1, { ...P, ...o });
+}
+// 공사장: 짓다 만 골조(충돌 상자) + 타워크레인 마스트
+export function siteScene(B, track, s0, s1) {
+  const rng = B.rng;
+  for (const p of track.pieces) {
+    if (!p.solid || p.L < 10) continue;
+    const a0 = Math.max(s0, p.s0), a1 = Math.min(s1, p.s0 + p.L);
+    for (const side of [-1, 1]) for (let s = a0; s < a1 - 6;) {
+      const w = Math.min(rng.range(16, 28), a1 - s), d = rng.range(14, 24), x0 = p.w + rng.range(2, 6), sc = s + w / 2;
+      const R = worldRect(p, sc, side * (x0 + d / 2), w / 2, d / 2);
+      if (w > 8 && free(B, track, R)) {
+        const surf = surfAt(p, sc), top = rng.range(18, 50), base = B.floorY - surf, h = top - base;
+        solid(B, sc, side * (x0 + d / 2), base + h / 2, d / 2, h / 2, w / 2 - 0.75, 'building');
+        B.add('skel', { s: sc, side, w: w - 1.5, d, h, x0, base, floors: Math.round(h / 3.6), done: rng.range(0.3, 0.8), net: rng.chance(0.7), seed: Math.floor(rng() * 1e9) });
+        claim(B, R);
+      }
+      s += w + rng.range(2, 10);
+    }
+  }
+}
+export function industrialScene(B, track, s0, s1) {
+  const rng = B.rng;
+  scatter(B, track, s0, s1, { every: 26, near: 3, far: 24, hw: 8, chance: 0.6 }, (s, x, side, p, hw) => {
+    const surf = surfAt(p, s), base = B.floorY - surf;
+    if (rng.chance(0.55)) {
+      const r = rng.range(5, hw), h = rng.range(14, 30) - base;
+      solid(B, s, x, base + h / 2, r * 0.92, h / 2, r * 0.92, 'tank');
+      B.add('tank', { s, x, r, h, base, hue: rng.pick([0, 30, 200, 120]) });
+    } else {
+      const r = rng.range(1.6, 2.6), h = rng.range(45, 80) - base;
+      solid(B, s, x, base + h / 2, r, h / 2, r, 'stack');
+      B.add('stack', { s, x, r, h, base });
+    }
+  });
+}
+export function rocks(B, track, s0, s1, o = {}) {
+  const rng = B.rng;
+  scatter(B, track, s0, s1, { every: 14, near: 0.8, far: 6, hw: 6, chance: 0.9, margin: 0.6 }, (s, x, side, p, hw) => {
+    const surf = surfAt(p, s), base = B.floorY - surf, top = rng.range(o.hmin || 10, o.hmax || 26), h = top - base;
+    solid(B, s, x, base + h / 2, hw, h / 2, hw, 'rock');
+    B.add('rock', { s, x, hw, h, base, seed: Math.floor(rng() * 1e6) });
+  });
+}
+export function palms(B, track, s0, s1) {
+  const rng = B.rng;
+  scatter(B, track, s0, s1, { every: 22, near: 1.2, far: 4, hw: 1.6, chance: 0.6 }, (s, x, side, p) => {
+    const surf = surfAt(p, s);
+    // 야자수는 노면 높이의 작은 화단 위 (화단 = 충돌)
+    const base = B.floorY - surf;
+    solid(B, s, x, base / 2, 1.4, -base / 2, 1.4, 'planter');
+    B.box(s, x, 1.7, 0.3, 1.7, 0.3, 'tree'); B.sph(s, x, 5.0, 2.3, 'tree');
+    B.add('planter', { s, x, base }); B.add('tree', { s, side, x, kind: 'palm', seed: Math.floor(rng() * 1e6) });
+  });
 }
 export function cableY(u, H, lo, endA, endB) {
   if (endA) return 1.2 + (H - 1.2) * u * u;
   if (endB) return H - (H - 1.2) * (1 - (1 - u) * (1 - u));
   const k = (2 * u - 1);
   return lo + (H - lo) * k * k;
-}
-
-// ───────── 터널 입구/출구 (산 + 포털 정면) ─────────
-// 산은 계단식 바위 덩어리(각 덩어리 = 충돌 상자)로 만들어 보이는 모양과 충돌이 같다.
-export function tunnelPortals(B, sIn, sOut, ceilY) {
-  const rocks = [];
-  const rock = (s, x, y, hx, hy, hz) => { solid(B, s, x, y, hx, hy, hz, 'rock'); rocks.push([s, x, y, hx, hy, hz]); };
-  // 입구 앞 산비탈(도로 양옆, 다리 끝에서부터 점점 높아짐)
-  for (let k = 0; k < 4; k++) {
-    const s = sIn - 52 + k * 13, hgt = 8 + k * 9;
-    for (const side of [-1, 1]) rock(s, side * (17.5 + 14 - k * 2), hgt / 2, 14 - k * 2 + 3, hgt / 2, 6.5);
-  }
-  // 포털 위 산 덩어리 (터널 천장 위 ~ 60m)
-  rock(sIn + 14, 0, (ceilY + 5 + 60) / 2, 70, (60 - ceilY - 5) / 2, 14);
-  for (const side of [-1, 1]) rock(sIn + 14, side * 44, (ceilY + 5) / 2, 30, (ceilY + 5) / 2, 14);
-  // 포털 정면(입구 위쪽 벽) / 출구 위쪽 벽
-  solid(B, sIn - 0.2, 0, (ceilY + 60) / 2, 30, (60 - ceilY) / 2, 0.6, 'rock');
-  for (const side of [-1, 1]) solid(B, sIn - 0.2, side * 21.9, ceilY / 2, 8.1, ceilY / 2, 0.6, 'rock');
-  solid(B, sOut + 0.2, 0, (ceilY + 60) / 2, 17, (60 - ceilY) / 2, 0.6, 'building');
-  B.add('hill', { s: sIn, rocks });
-  B.add('tportal', { s: sIn, dir: 1, y: ceilY });
-  B.add('tportal', { s: sOut, dir: -1, y: ceilY });
-}
-
-// ───────── 마천루 협곡 ─────────
-export function canyonScene(B, s0, s1) {
-  for (const side of [-1, 1]) B.buildingRow(s0, s1, side, { style: 'glass', tex: 0, hmin: 110, hmax: 250, wmin: 26, wmax: 48, neon: 0.5 });
-}
-
-// ───────── 새벽 해안 리조트 거리 (피날레): 밝은 호텔·리조트 + 야자수 ─────────
-export function waterfrontScene(B, s0, s1) {
-  for (const side of [-1, 1]) B.buildingRow(s0, s1, side, { style: 'hotel', tex: 1, hmin: 50, hmax: 130, neon: 0.2 });
-  for (let s = s0 + 24; s < s1 - 10; s += 34) B.tree(s, s % 68 < 34 ? 1 : -1, { x: 15.4, kind: 'palm' });
 }

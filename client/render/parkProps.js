@@ -19,45 +19,44 @@ function canopy(B, d) {
   B.glow.cyl(0, 2, z, 1.65, 0.15, 12, [5, 3.4, 1.2]); B.glow.cyl(0, 5, z, 1.65, 0.15, 12, [5, 3.4, 1.2]);
   B.prop.cyl(0, 0, z, R - 0.8, 0.25, 24, mulc(K.white, 0.75));
   // 매표소(양옆)
-  const bx0 = Math.min(13, d.R + 1.0), bhx = (CORR - bx0) / 2;
-  for (const s of [-1, 1]) { B.prop.box(s * (bx0 + bhx), 1.5, z, bhx, 1.5, d.R, mulc(c1, 0.8), { bevel: 0.1 }); B.prop.box(s * (bx0 + bhx), 3.1, z, bhx + 0.1, 0.1, d.R + 0.1, c2); for (let k = -d.R + 2; k < d.R; k += 4) B.glow.box(s * bx0 - s * 0.02, 2.4, z + k, 0.02, 0.2, 0.8, neon(d.hue + 40, 2.4)); }
+  const bx0 = d.R + 1.0, bhx = ((d.w || CORR) - bx0) / 2;
+  if (bhx > 0.3) for (const s of [-1, 1]) { B.prop.box(s * (bx0 + bhx), 1.5, z, bhx, 1.5, d.R, mulc(c1, 0.8), { bevel: 0.1 }); B.prop.box(s * (bx0 + bhx), 3.1, z, bhx + 0.1, 0.1, d.R + 0.1, c2); for (let k = -d.R + 2; k < d.R; k += 4) B.glow.box(s * bx0 - s * 0.02, 2.4, z + k, 0.02, 0.2, 0.8, neon(d.hue + 40, 2.4)); }
 }
 function cupbase(B, d) {
-  const z = Z(d.s);
-  for (const cx of [-7, 7]) { B.prop.cyl(cx, 0, z, 6.2, 0.06, 24, paint(cx > 0 ? 200 : 320, 0.9, 0.5)); B.prop.cyl(cx, 0, z, 0.8, 0.7, 10, mulc(K.yellow, 0.9)); }
-  for (const s of [-1, 1]) { B.prop.box(s * 15.4, 0.8, z, 1.2, 0.8, 7.0, mulc(K.brown, 0.9)); B.grass.box(s * 15.4, 1.65, z, 1.1, 0.1, 6.9, hex(0x4a8a3c)); for (let k = -6; k <= 6; k += 1.5) B.glow.box(s * 15.4, 1.8, z + k, 0.15, 0.12, 0.15, neon(k * 40, 2.2)); }
+  const z = Z(d.s), W = d.w || 15;
+  for (const cx of [-W * 0.47, W * 0.47]) { B.prop.cyl(cx, 0.01, z, 6.0, 0.05, 24, paint(cx > 0 ? 200 : 320, 0.9, 0.5)); B.prop.cyl(cx, 0, z, 0.8, 0.7, 10, mulc(K.yellow, 0.9)); }
 }
 function wheelbase(B, d) {
   const z = Z(d.s), cy = d.cy;
-  for (const dz of [-3.2, 3.2]) for (const side of [-1, 1]) B.metal.beam([side * 15.5, 0, z + dz], [0, cy, z + dz], 0.7, 0.7, mulc(K.white, 0.9));
+  const X = d.X || 15.5;
+  for (const dz of [-3.2, 3.2]) for (const side of [-1, 1]) B.metal.beam([side * X, 0, z + dz], [0, cy, z + dz], 0.7, 0.7, mulc(K.white, 0.9));
   B.metal.beam([0, cy, z - 3.6], [0, cy, z + 3.6], 1.2, 1.2, mulc(K.steel, 0.9));
-  B.prop.box(0, 0.08, z, 15, 0.08, 4.5, paint(d.hue, 0.6, 0.4));
+  for (const side of [-1, 1]) B.prop.box(side * X, -2, z, 1.4, 2.1, 4.2, paint(d.hue, 0.6, 0.4));
   B.glow.box(0, cy, z + 3.65, 0.8, 0.8, 0.02, neon(d.hue, 3));
 }
 function swingframe(B, d) {
   const z = Z(d.s), py = d.py;
-  for (const dz of [-3.4, 3.4]) for (const side of [-1, 1]) B.metal.beam([side * 15.2, 0, z + dz], [0, py, z + dz], 0.6, 0.6, mulc(K.red, 0.9));
+  const X = d.X || 15.2;
+  for (const dz of [-3.4, 3.4]) for (const side of [-1, 1]) B.metal.beam([side * X, 0, z + dz], [0, py, z + dz], 0.6, 0.6, mulc(K.red, 0.9));
   B.metal.beam([0, py, z - 3.8], [0, py, z + 3.8], 0.8, 0.8, mulc(K.steel, 0.8));
-  B.prop.box(0, 0.06, z, 15, 0.06, 4, mulc(K.brown, 0.8));
-  for (const side of [-1, 1]) B.glow.box(side * 7, py * 0.55, z + 3.75, 0.2, 0.2, 0.02, K.orange3);
+  for (const side of [-1, 1]) B.glow.box(side * X * 0.45, py * 0.55, z + 3.75, 0.2, 0.2, 0.02, K.orange3);
 }
 function track(B, d) {
-  const z = Z(d.s), y = d.y, col = paint(d.hue, 0.95, 0.85);
+  const z = Z(d.s), y = d.y, col = paint(d.hue, 0.95, 0.85), W = d.w || 20;
   if (d.ground) {
-    for (const dz of [-0.6, 0.6]) B.metal.box(0, 0.06, z + dz, 40, 0.06, 0.08, mulc(K.steel, 1.1));
-    for (let x = -40; x <= 40; x += 1.6) B.prop.box(x, 0.02, z, 0.18, 0.02, 0.9, mulc(K.brown, 0.8));
-    for (const side of [-1, 1]) { B.metal.box(side * 13, 1.5, z + 1.5, 0.12, 1.5, 0.12, K.dark); B.glow.box(side * 13, 3.1, z + 1.5, 0.22, 0.22, 0.22, K.red3); }
-    B.stripe.box(0, 0.015, z + 2.3, 12, 0.012, 0.2, [1, 1, 1], { uv: [2.6, 2.6] }); B.stripe.box(0, 0.015, z - 2.3, 12, 0.012, 0.2, [1, 1, 1], { uv: [2.6, 2.6] });
+    for (const dz of [-0.6, 0.6]) B.metal.box(0, 0.06, z + dz, W, 0.06, 0.08, mulc(K.steel, 1.1));
+    B.stripe.box(0, 0.015, z + 2.3, Math.min(W, 12), 0.012, 0.2, [1, 1, 1], { uv: [2.6, 2.6] }); B.stripe.box(0, 0.015, z - 2.3, Math.min(W, 12), 0.012, 0.2, [1, 1, 1], { uv: [2.6, 2.6] });
     return;
   }
-  B.metal.box(0, y - 0.25, z, CORR + 4, 0.25, 0.8, col);
-  for (const dz of [-0.55, 0.55]) B.metal.beam([-CORR - 4, y + 0.05, z + dz], [CORR + 4, y + 0.05, z + dz], 0.14, 0.14, mulc(K.steel, 1.1));
-  for (const side of [-1, 1]) { B.metal.box(side * 15.2, (y - 0.5) / 2, z, 0.4, (y - 0.5) / 2, 0.4, col); B.metal.beam([side * 15.2, 0.5, z], [side * 15.2 - side * 2, y - 0.5, z], 0.15, 0.15, col); }
-  for (let x = -14; x <= 14; x += 3.5) B.glow.box(x, y - 0.52, z + 0.82, 0.25, 0.06, 0.02, neon(d.hue, 2.6));
+  B.metal.box(0, y - 0.25, z, W, 0.25, 0.8, col);
+  for (const dz of [-0.55, 0.55]) B.metal.beam([-W, y + 0.05, z + dz], [W, y + 0.05, z + dz], 0.14, 0.14, mulc(K.steel, 1.1));
+  for (const side of [-1, 1]) B.metal.box(side * (W - 1.2), (y - 0.5) / 2, z, 0.4, (y - 0.5) / 2, 0.4, col);
+  for (let x = -W + 2; x <= W - 2; x += 3.5) B.glow.box(x, y - 0.52, z + 0.82, 0.25, 0.06, 0.02, neon(d.hue, 2.6));
 }
 function droptower(B, d) {
   const z = Z(d.s), top = d.top;
-  for (const side of [-1, 1]) { B.metal.box(side * 13.6, 16, z, 1.2, 16, 1.2, mulc(K.white, 0.85)); for (let y = 2; y < 32; y += 3) B.glow.box(side * 13.6 - side * 1.22, y, z, 0.02, 0.18, 0.5, neon(y * 12, 2.6)); B.glow.box(side * 13.6, top + 0.3, z, 0.4, 0.3, 0.4, K.red3); }
+  const X = d.X || 13.6;
+  for (const side of [-1, 1]) { B.metal.box(side * X, 16, z, 1.2, 16, 1.2, mulc(K.white, 0.85)); for (let y = 2; y < 32; y += 3) B.glow.box(side * X - side * 1.22, y, z, 0.02, 0.18, 0.5, neon(y * 12, 2.6)); B.glow.box(side * X, top + 0.3, z, 0.4, 0.3, 0.4, K.red3); }
 }
 function swinger(B, d) {
   const z = Z(d.s), y = d.y;
@@ -65,21 +64,22 @@ function swinger(B, d) {
   B.prop.cyl(0, y - 0.6, z, 11, 1.2, 20, paint(280, 0.9, 0.7), { r2: 11 });
   B.prop.cyl(0, y + 0.6, z, 11, 2.2, 20, paint(50, 0.95, 0.8), { r2: 1.5 });
   for (let k = 0; k < 20; k++) { const a = k * Math.PI / 10; B.glow.box(Math.cos(a) * 10.9, y - 0.7, z + Math.sin(a) * 10.9, 0.15, 0.1, 0.15, neon(k * 18, 3)); }
-  for (const s of [-1, 1]) B.prop.box(s * 13.9, 1.5, z, 2.7, 1.5, 10.5, paint(280, 0.7, 0.6), { bevel: 0.1 });
+  const bx0 = 11.2, bhx = ((d.w || 16.6) - bx0) / 2;
+  if (bhx > 0.3) for (const s of [-1, 1]) B.prop.box(s * (bx0 + bhx), 1.5, z, bhx, 1.5, 10.5, paint(280, 0.7, 0.6), { bevel: 0.1 });
 }
 function parkentry(B, d, ctx) {
-  const z = Z(d.s);
-  for (const s of [-1, 1]) { B.prop.box(s * 17.6, 11, z, 1.0, 11, 1.2, paint(330, 0.95, 0.6), { bevel: 0.15 }); B.prop.cyl(s * 17.6, 22, z, 1.5, 4, 8, paint(200, 0.9, 0.7), { r2: 0 }); }
-  B.prop.box(0, 19, z, CORR + 1, 3, 1.2, paint(45, 0.95, 0.8), { bevel: 0.2 });
-  for (let x = -15; x <= 15; x += 1.5) B.glow.box(x, 15.95, z + 1.21, 0.18, 0.12, 0.02, neon(x * 20, 3.2));
-  ctx.signs.push({ x: 0, y: 19.2, z: z + 1.22, w: 26, h: 4.2, ry: 0, text: 'TEMU LAND 테무랜드', color: '#ff4ad8', fixed: true });
+  const z = Z(d.s), W = (d.w || 16.6) + 1;
+  for (const s of [-1, 1]) { B.prop.box(s * W, 11, z, 1.0, 11, 1.2, paint(330, 0.95, 0.6), { bevel: 0.15 }); B.prop.cyl(s * W, 22, z, 1.5, 4, 8, paint(200, 0.9, 0.7), { r2: 0 }); }
+  B.prop.box(0, 19, z, W, 3, 1.2, paint(45, 0.95, 0.8), { bevel: 0.2 });
+  for (let x = -W + 1; x <= W - 1; x += 1.5) B.glow.box(x, 15.95, z + 1.21, 0.18, 0.12, 0.02, neon(x * 20, 3.2));
+  ctx.signs.push({ x: 0, y: 19.2, z: z + 1.22, w: Math.min(18, 2 * W - 2), h: 4.2, ry: 0, text: 'TEMU LAND 테무랜드', color: '#ff4ad8', fixed: true });
 }
 function hauntface(B, d, ctx) {
-  const z = Z(d.s), entry = d.dir > 0, off = entry ? 0.2 : -0.2, W = entry ? 22 : 17, col = hex(0x3a2a48);
-  B.prop.box(0, (7 + 48) / 2, z + off, W, (48 - 7) / 2, 0.6, col, { bevel: 0.2 });
-  if (entry) for (const s of [-1, 1]) B.prop.box(s * 18, 3.5, z + off, 4, 3.5, 0.6, col);
-  for (let x = -18; x <= 18; x += 6) { B.glow.box(x, 22, z + off * 4.5, 1.0, 1.4, 0.02, [2.6, 2.2, 0.6]); B.prop.box(x, 22, z + off * 4.4, 1.2, 1.6, 0.02, hex(0x120a18)); }
-  for (let x = -14; x <= 14; x += 4) B.prop.cone(x, 7, z + off * 3, 0.5, 2.5, 5, hex(0x2a1a34));
+  const z = Z(d.s), entry = d.dir > 0, off = entry ? 0.2 : -0.2, W = (d.w || 13) + 4, col = hex(0x3a2a48);
+  B.prop.box(0, (7 + 24) / 2, z + off, W, (24 - 7) / 2, 0.6, col, { bevel: 0.2 });
+  for (const s of [-1, 1]) B.prop.box(s * (W - 1.5), 3.5, z + off, 1.5, 3.5, 0.6, col);
+  for (let x = -W + 3; x <= W - 3; x += 6) { B.glow.box(x, 16, z + off * 4.5, 1.0, 1.4, 0.02, [2.6, 2.2, 0.6]); B.prop.box(x, 16, z + off * 4.4, 1.2, 1.6, 0.02, hex(0x120a18)); }
+  for (let x = -W + 2; x <= W - 2; x += 4) B.prop.cone(x, 24, z + off, 0.5, 2.5, 5, hex(0x2a1a34));
   if (entry) ctx.signs.push({ x: 0, y: 10.4, z: z + 1.0, w: 16, h: 2.8, ry: 0, text: '👻 유령의 집 HAUNTED', color: '#b06aff', fixed: true });
 }
 function crate(B, d) {

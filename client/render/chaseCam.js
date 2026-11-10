@@ -40,7 +40,7 @@ export function stepChase(st, dt, car, lim = {}) {
   const h = carHeading(car.q || [0, 0, 0, 1]);
   let yawT = h === null ? st.yawT : h;                                                     // 기수가 수직이면 이전 방향 유지
   if (spd > 3) yawT += wrapAngle(Math.atan2(-v[0], -v[2]) - yawT) * 0.3 * Math.min(1, (spd - 3) / 5);   // 옆으로 미끄러지면 진행 방향도 반영
-  yawT += wrapAngle(0 - yawT) * 0.15;                                                       // 도로 방향으로 살짝 끌어당김
+  yawT += wrapAngle((lim.roadYaw || 0) - yawT) * 0.15;                                      // 도로(경로) 방향으로 살짝 끌어당김
   st.yawT = yawT;
   const first = !st.init;
   st.yaw = first ? yawT : st.yaw + wrapAngle(yawT - st.yaw) * (1 - Math.exp(-dt * 3));

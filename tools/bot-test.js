@@ -67,7 +67,7 @@ async function scenario(connect, advance) {
   await advance(100);
   const bots = [A, B, C, D];
   check(bots.every((b) => b.init && b.init.n === 4), '모든 플레이어가 game:init 수신');
-  check(JSON.stringify(A.init.assign) === JSON.stringify([17, 34, 68, 136]), `4명 키 배분 = 좌상 q+e(17), 우상 w+r(34), 좌하 a+d(68), 우하 s+f(136)`);
+  check(JSON.stringify(A.init.assign) === JSON.stringify([17 | 256, 34 | 256, 68 | 256, 136 | 256]), `4명 키 배분 = q+e, w+r, a+d, s+f (+ 모두 스페이스 브레이크)`);
   check(new Set(bots.map((b) => b.init.slot)).size === 4, '슬롯이 서로 다름');
 
   section('4) 카운트다운 / 상태 수신 / 허용되지 않은 키 무시');
@@ -82,12 +82,12 @@ async function scenario(connect, advance) {
   check(A.last().k[0] === 0x11, `A가 8키를 보내도 담당(q,e)만 반영됨 (k0=${A.last().k[0]})`);
   check(A.last().k[1] === 0, `B가 남의 키(q)를 보내면 무시됨 (k1=${A.last().k[1]})`);
 
-  section('5) 4명이 바퀴 하나씩 눌러 직진 → 배출구로 이륙/연료 소모');
-  A.raw.emit('input', 0x01); B.raw.emit('input', 0x02); C.raw.emit('input', 0x04); D.raw.emit('input', 0x08);
+  section('5) 앞자리 두 명이 Q·W 로 전진 (뒷자리 A·S 는 후진 담당) → 배출구로 이륙/연료 소모');
+  A.raw.emit('input', 0x01); B.raw.emit('input', 0x02); C.raw.emit('input', 0); D.raw.emit('input', 0);
   const z0 = A.last().p[2];
   await advance(3000);
   const z1 = A.last().p[2];
-  check(z1 < z0 - 5, `바퀴 4개로 전진 (z ${z0.toFixed(1)} → ${z1.toFixed(1)})`);
+  check(z1 < z0 - 5, `Q+W 로 전진 (z ${z0.toFixed(1)} → ${z1.toFixed(1)})`);
   A.raw.emit('input', 0x11); B.raw.emit('input', 0x22); C.raw.emit('input', 0x44); D.raw.emit('input', 0x88);   // 바퀴+배출구
   const f0 = A.last().f;
   await advance(1200);
@@ -127,11 +127,11 @@ async function scenario(connect, advance) {
   r = await S.call('room:start');
   check(r.ok, '1명은 바로 시작 가능');
   await advance(200);
-  check(JSON.stringify(S.init.assign) === '[255]', '1명 = 8키 전부 담당');
+  check(JSON.stringify(S.init.assign) === '[511]', '1명 = 8키 + 스페이스 전부 담당');
   await advance(3500);
   S.raw.emit('debug', { cmd: 'god', on: true });
   S.raw.emit('debug', { cmd: 'tp', s: 8962 });
-  S.raw.emit('input', 0x0f);
+  S.raw.emit('input', 0x03);
   await advance(6000);
   check(S.end && S.end.time > 0, `도착! 결과 수신: 시간 ${S.end && S.end.time}s, 사망 ${S.end && S.end.deaths}회`);
   S.raw.emit('room:again');
@@ -145,7 +145,7 @@ async function scenario(connect, advance) {
   await advance(50);
   r = await P1.call('room:start');
   await advance(100);
-  check(JSON.stringify(P1.init.assign) === '[85,170]', '2명 = 왼쪽(q a e d) / 오른쪽(w s r f) 배분');
+  check(JSON.stringify(P1.init.assign) === '[341,426]', '2명 = 왼쪽(q a e d) / 오른쪽(w s r f) + 스페이스 배분');
   P1.raw.close(); P2.raw.close();
 }
 

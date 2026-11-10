@@ -98,14 +98,14 @@ function bldg(B, d, ctx) {
 
 // ───────────────── 가로등/가로수/신호등/정류장 ─────────────────
 function lamp(B, d, ctx) {
-  const x = d.side * 13.9, z = Z(d.s);
+  const sd = d.side, x = d.x !== undefined ? d.x : sd * 13.9, z = Z(d.s), xi = x - sd * 1.5, xl = x - sd * 3.0;
   B.metal.box(x, 0.35, z, 0.3, 0.35, 0.3, K.metal, { bevel: 0.05 });
   B.metal.box(x, 4.5, z, 0.14, 4.5, 0.14, mulc(K.metal, 1.2), { bevel: 0.03 });
-  B.metal.beam([x, 8.7, z], [d.side * 12.4, 9.0, z], 0.16, 0.14, K.metal);
-  B.metal.beam([d.side * 12.4, 9.0, z], [d.side * 10.9, 8.85, z], 0.16, 0.12, K.metal);
-  B.glow.box(d.side * 10.8, 8.72, z, 0.55, 0.08, 0.26, K.lamp);
-  B.metal.box(d.side * 10.8, 8.84, z, 0.6, 0.05, 0.3, K.dark);
-  ctx.lamps.push([d.side * 10.8, 8.5, z]);
+  B.metal.beam([x, 8.7, z], [xi, 9.0, z], 0.16, 0.14, K.metal);
+  B.metal.beam([xi, 9.0, z], [xl, 8.85, z], 0.16, 0.12, K.metal);
+  B.glow.box(xl - sd * 0.1, 8.72, z, 0.55, 0.08, 0.26, K.lamp);
+  B.metal.box(xl - sd * 0.1, 8.84, z, 0.6, 0.05, 0.3, K.dark);
+  ctx.lamps.push([xl, 8.5, z]);
 }
 function tree(B, d, ctx) {
   const rng = makeRng(d.seed), x = d.x !== undefined ? d.x : d.side * 15.3, z = Z(d.s);
@@ -148,16 +148,16 @@ function subway(B, d) {
   B.prop.box(x, 0.02, z, 0.9, 0.02, 1.2, K.dark);
 }
 function billboard(B, d, ctx) {
-  const x = d.side * 14.6, z = Z(d.s);
+  const x = d.x !== undefined ? d.x : d.side * 14.6, z = Z(d.s);
   for (const sz of [-3, 3]) B.metal.box(x, 6, z + sz, 0.25, 6, 0.25, K.metal, { bevel: 0.04 });
   B.metal.box(x, 11.5, z, 0.3, 2.3, 4.2, K.dark, { bevel: 0.05 });
   ctx.signs.push({ x: x - d.side * 0.36, y: 11.5, z, w: 7.6, h: 4.2, ry: d.side > 0 ? -Math.PI / 2 : Math.PI / 2, text: d.text, hue: d.hue, neon: true });
 }
 function sign(B, d, ctx) {
-  const x = d.side * 14.2, z = Z(d.s), w = d.big ? 6.4 : 5.2, h = d.big ? 2.0 : 1.5, y = d.big ? 4.4 : 3.6;
+  const x = d.x !== undefined ? d.x : d.side * 14.2, z = Z(d.s), w = d.big ? 6.4 : 5.2, h = d.big ? 2.0 : 1.5, y = d.big ? 4.4 : 3.6;
   for (const sz of [-w / 2 + 0.3, w / 2 - 0.3]) B.metal.box(x, y / 2, z + sz, 0.08, y / 2, 0.08, K.metal);
   B.metal.box(x, y, z, 0.07, h / 2 + 0.08, w / 2 + 0.08, K.dark);
-  ctx.signs.push({ x: x, y, z, w, h, ry: 0, text: d.text, color: d.color, fixed: true, nx: -d.side });
+  ctx.signs.push({ x: x - d.side * 0.09, y, z, w, h, ry: d.side > 0 ? -Math.PI / 2 : Math.PI / 2, text: d.text, color: d.color, fixed: true });
 }
 function xwalk(B, d) {
   const z = Z(d.s);
@@ -211,60 +211,53 @@ function veh(B, d, ctx) {
     ctx.fires.push([d.x, 1.3, Z(d.s)]); for (let k = 0; k < 4; k++) B.glow.cone(d.x + (k - 1.5) * 0.4, 1.4, Z(d.s) + (k % 2 ? 0.4 : -0.4), 0.28, 0.9 + (k % 3) * 0.4, 5, K.orange3); }
 }
 function pad(B, d) {
-  const z = Z((d.s0 + d.s1) / 2), hz = (d.s1 - d.s0) / 2, col = d.finish ? [3, 2.4, 0.5] : [0.18, 1.5, 0.9];
-  B.glow.box(0, 0.03, z, 11.6, 0.012, hz, mulc(col, 0.35));
-  for (const s of [-1, 1]) { B.glow.box(s * 11.6, 0.06, z, 0.12, 0.03, hz, mulc(col, 2.2)); }
-  B.glow.box(0, 0.06, Z(d.s0), 11.7, 0.03, 0.1, mulc(col, 2.2)); B.glow.box(0, 0.06, Z(d.s1), 11.7, 0.03, 0.1, mulc(col, 2.2));
-  for (let s = d.s0 + 6; s < d.s1 - 3; s += 8) for (const x of [-6, 0, 6]) {
-    B.glow.save().translate(x, 0.07, Z(s)).rotY(0);
+  const z = Z((d.s0 + d.s1) / 2), hz = (d.s1 - d.s0) / 2, col = d.finish ? [3, 2.4, 0.5] : [0.18, 1.5, 0.9], W = Math.max(1.5, Math.min(11.6, (d.w || 12) - 0.4));
+  B.glow.box(0, 0.03, z, W, 0.012, hz, mulc(col, 0.35));
+  for (const s of [-1, 1]) { B.glow.box(s * W, 0.06, z, 0.12, 0.03, hz, mulc(col, 2.2)); }
+  B.glow.box(0, 0.06, Z(d.s0), W + 0.1, 0.03, 0.1, mulc(col, 2.2)); B.glow.box(0, 0.06, Z(d.s1), W + 0.1, 0.03, 0.1, mulc(col, 2.2));
+  const xs = W > 7 ? [-W / 2, 0, W / 2] : [0];
+  for (let s = d.s0 + 6; s < d.s1 - 3; s += 8) for (const x of xs) {
+    B.glow.save().translate(x, 0.07, Z(s));
     B.glow.quadOut([-1.6, 0, 0.9], [0, 0, -1.0], [0, 0, -0.35], [-1.6, 0, 1.55], [0, 1, 0], mulc(col, 1.6));
     B.glow.quadOut([1.6, 0, 0.9], [0, 0, -1.0], [0, 0, -0.35], [1.6, 0, 1.55], [0, 1, 0], mulc(col, 1.6));
     B.glow.restore();
   }
-  for (const s of [-1, 1]) for (const e of [d.s0, d.s1]) { B.metal.box(s * 12.3, 0.9, Z(e), 0.14, 0.9, 0.14, K.metal); B.glow.box(s * 12.3, 1.9, Z(e), 0.2, 0.12, 0.2, mulc(col, 3)); }
 }
 function cp(B, d, ctx) {
-  const z = Z(d.s);
-  for (const s of [-1, 1]) { B.metal.box(s * 12.5, 4, z, 0.3, 4, 0.3, K.metal, { bevel: 0.05 }); B.glow.box(s * 12.5, 4, z + 0.32, 0.08, 3.6, 0.04, K.cyan); }
-  B.metal.box(0, 8.1, z, 12.8, 0.35, 0.3, K.metal, { bevel: 0.06 });
-  B.glow.box(0, 7.7, z + 0.2, 12.4, 0.07, 0.05, K.cyan);
-  for (let x = -11.5; x <= 11.5; x += 1.5) B.glow.box(x, 5.6, z, 0.015, 2.1, 0.015, [0.2, 1.6, 2.0]);
-  ctx.signs.push({ x: 0, y: 9.4, z, w: 6, h: 1.5, ry: 0, text: `CHECKPOINT ${d.id}`, color: '#35f0ff', fixed: true, nx: 1 });
+  const z = Z(d.s), W = (d.w || 12) + 0.5;
+  for (const s of [-1, 1]) { B.metal.box(s * W, 4, z, 0.3, 4, 0.3, K.metal, { bevel: 0.05 }); B.glow.box(s * W, 4, z + 0.32, 0.08, 3.6, 0.04, K.cyan); }
+  B.metal.box(0, 8.1, z, W + 0.3, 0.35, 0.3, K.metal, { bevel: 0.06 });
+  B.glow.box(0, 7.7, z + 0.2, W - 0.1, 0.07, 0.05, K.cyan);
+  for (let x = -W + 1; x <= W - 1; x += 1.5) B.glow.box(x, 5.6, z, 0.015, 2.1, 0.015, [0.2, 1.6, 2.0]);
+  ctx.signs.push({ x: 0, y: 9.4, z, w: Math.min(6, 2 * W - 1), h: 1.5, ry: 0, text: 'CHECKPOINT ' + d.id, color: '#35f0ff', fixed: true, nx: 1 });
 }
 function finish(B, d, ctx) {
-  const z = Z(d.s);
-  for (const s of [-1, 1]) B.metal.box(s * 13, 6, z, 0.5, 6, 0.5, K.metal, { bevel: 0.08 });
-  B.metal.box(0, 12.2, z, 13.5, 0.7, 0.5, K.metal, { bevel: 0.08 });
-  for (let i = 0; i < 28; i++) for (let j = 0; j < 2; j++) B.glow.box(-13 + i * 0.95 + 0.47, 11.9 + j * 0.6, z + 0.52, 0.45, 0.28, 0.02, (i + j) % 2 ? [5, 5, 5] : [0.1, 0.1, 0.1]);
-  for (let x = -11; x <= 11; x += 1) B.glow.box(x, 8.2, z, 0.015, 3.6, 0.015, [3, 2.4, 0.4]);
+  const z = Z(d.s), W = (d.w || 12) + 1;
+  for (const s of [-1, 1]) B.metal.box(s * W, 6, z, 0.5, 6, 0.5, K.metal, { bevel: 0.08 });
+  B.metal.box(0, 12.2, z, W + 0.5, 0.7, 0.5, K.metal, { bevel: 0.08 });
+  const n = Math.floor(2 * W / 0.95);
+  for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) B.glow.box(-W + i * 0.95 + 0.47, 11.9 + j * 0.6, z + 0.52, 0.45, 0.28, 0.02, (i + j) % 2 ? [5, 5, 5] : [0.1, 0.1, 0.1]);
+  for (let x = -W + 2; x <= W - 2; x += 1) B.glow.box(x, 8.2, z, 0.015, 3.6, 0.015, [3, 2.4, 0.4]);
   ctx.signs.push({ x: 0, y: 14.2, z, w: 10, h: 2.2, ry: 0, text: 'FINISH', color: '#ffd24a', fixed: true, nx: 1 });
 }
 function gap(B, d) {
   if (parkGap(B, d)) return;
-  const len = d.s1 - d.s0, z = Z((d.s0 + d.s1) / 2);
-  B.prop.box(0, -9.6, z, 17, 0.2, len / 2 + 2, mulc(K.dark, 0.5));
+  const W = d.w || 8;
   for (const e of [d.s0, d.s1]) {
-    B.metal.beam([-16, -0.5, Z(e)], [16, -0.5, Z(e)], 0.6, 0.8, K.rust);
-    for (let x = -15; x < 15; x += 1.7) B.prop.box(x + ((x * 7) % 1) * 0.3, -0.1, Z(e) + (e === d.s0 ? 0.35 : -0.35), 0.55, 0.12, 0.3 + (((x * 13) % 1) + 1) % 1 * 0.3, K.concD, { bevel: 0.05 });
-    for (let x = -14; x < 14; x += 3.1) B.metal.beam([x, -0.2, Z(e)], [x + 0.4, 0.5 + (((x * 3) % 1) + 1) % 1 * 0.5, Z(e) + (e === d.s0 ? 0.6 : -0.6)], 0.06, 0.06, K.rust);
+    const ze = Z(e), dir = e === d.s0 ? 1 : -1, yy = e === d.s0 ? 0 : (d.dy || 0);
+    B.metal.beam([-W, yy - 0.5, ze], [W, yy - 0.5, ze], 0.6, 0.8, K.rust);
+    for (let x = -W + 0.6; x < W - 0.4; x += 1.7) B.prop.box(x, yy - 0.1, ze + dir * 0.35, 0.55, 0.12, 0.3, K.concD, { bevel: 0.05 });
+    for (let x = -W + 1; x < W - 1; x += 3.1) B.metal.beam([x, yy - 0.2, ze], [x + 0.4, yy + 0.6, ze + dir * 0.6], 0.06, 0.06, K.rust);
+    for (const s of [-1, 1]) B.glow.box(s * (W - 0.4), yy + 0.5, ze - dir * 0.3, 0.12, 0.5, 0.12, K.red3);
   }
-  for (const x of [-13.5, 13.5]) B.metal.beam([x, -0.5, Z(d.s0)], [x, -0.5, Z(d.s1)], 0.5, 0.6, mulc(K.rust, 0.7));
 }
 function step(B, d) {
   if (parkStep(B, d)) return;
-  const len = d.s1 - d.s0, z = Z((d.s0 + d.s1) / 2);
-  if (d.style === 'girder') {
-    // 크레인이 들어 올린 철골 데크: I빔 + 데크 플레이트 + 기둥
-    B.metal.box(0, d.h - 0.2, z, 16.5, 0.2, len / 2, mulc(K.steel, 0.55), { bevel: 0.03 });
-    for (let x = -14; x <= 14; x += 7) { B.metal.box(x, d.h - 0.75, z, 0.18, 0.35, len / 2, mulc(K.orange, 0.9)); B.metal.box(x, d.h - 0.4, z, 0.5, 0.04, len / 2, mulc(K.orange, 0.8)); }
-    for (let s = d.s0 + 3; s < d.s1; s += 9) for (const x of [-12, 0, 12]) B.metal.box(x, (d.h - 1.1) / 2, Z(s), 0.25, (d.h - 1.1) / 2, 0.25, mulc(K.orange, 0.7));
-    B.stripe.box(0, d.h / 2, Z(d.s0) + 0.62, 16.6, d.h / 2, 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
-    for (let x = -15; x <= 15; x += 5) B.glow.box(x, d.h + 0.15, Z(d.s0) + 0.7, 0.14, 0.14, 0.05, K.orange3);
-    return;
-  }
-  B.prop.box(0, d.h / 2 - 0.02, z, 16.5, d.h / 2 - 0.02, len / 2, K.concD, { bevel: 0.1 });
-  B.stripe.box(0, d.h / 2, Z(d.s0) + 0.62, 16.6, d.h / 2, 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
-  for (let x = -15; x <= 15; x += 5) B.glow.box(x, d.h + 0.15, Z(d.s0) + 0.7, 0.14, 0.14, 0.05, K.orange3);
+  // 단의 앞면(벽): 그 위로 경로가 이어진다
+  const z = Z(d.s0), W = d.w || 8, col = d.style === 'roof' ? hex(0x4a3a40) : d.style === 'balcony' ? mulc(K.white, 0.85) : K.concD;
+  B.prop.box(0, d.h / 2, z, W + 0.1, d.h / 2, 0.6, col, { bevel: 0.06 });
+  B.stripe.box(0, d.h / 2, z + 0.62, W + 0.1, Math.min(0.5, d.h / 2), 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
+  for (let x = -W + 1; x <= W - 1; x += 3) B.glow.box(x, d.h + 0.15, z + 0.5, 0.14, 0.14, 0.05, K.orange3);
 }
 function portal(B, d) {
   if (parkPortal(B, d)) return;
@@ -279,26 +272,25 @@ function portal(B, d) {
 }
 function ceil(B, d) {
   if (parkCeil(B, d)) return;
-  const [a, b] = clipOf(d), len = b - a, z = Z((a + b) / 2), y = d.y;
-  if (d.style === 'slab') {
-    // 공사 중 건물의 콘크리트 슬래브 천장 + 보 + 작업등
-    B.prop.box(0, y + 2.5, z, 16.6, 2.5, len / 2, mulc(K.conc, 0.75), { bevel: 0.08 });
-    for (const k of every(d, 3, 7, a, b)) { B.prop.box(0, y - 0.35, Z(k), 16.6, 0.35, 0.3, mulc(K.concD, 0.9)); }
-    for (const k of every(d, 6, 14, a, b)) for (const x of [-7, 7]) { B.glow.box(x, y - 0.75, Z(k), 0.5, 0.06, 0.2, [6, 5.2, 3.6]); B.metal.beam([x, y - 0.7, Z(k)], [x, y - 0.05, Z(k)], 0.03, 0.03, K.dark); }
+  const [a, b] = clipOf(d), len = b - a, z = Z((a + b) / 2), y = d.y, W = d.w || 16.6;
+  if (d.walls !== false) for (const s of [-1, 1]) B.prop.box(s * (W + 0.5), (y + 5) / 2, z, 0.5, (y + 5) / 2, len / 2, d.style === 'slab' ? mulc(K.conc, 0.7) : d.style === 'office' ? mulc(K.white, 0.6) : hex(0x474b54), { bevel: 0.08 });
+  if (d.style === 'slab' || d.style === 'office') {
+    B.prop.box(0, y + 2.5, z, W + 1, 2.5, len / 2, d.style === 'office' ? mulc(K.white, 0.75) : mulc(K.conc, 0.75), { bevel: 0.08 });
+    for (const k of every(d, 3, 7, a, b)) { B.prop.box(0, y - 0.35, Z(k), W, 0.35, 0.3, mulc(K.concD, 0.9)); }
+    for (const k of every(d, 6, 10, a, b)) for (const x of [-W / 2, W / 2]) { B.glow.box(x, y - 0.75, Z(k), 0.5, 0.06, 0.2, [6, 5.2, 3.6]); B.metal.beam([x, y - 0.7, Z(k)], [x, y - 0.05, Z(k)], 0.03, 0.03, K.dark); }
     return;
   }
-  B.prop.box(0, y + 2.5, z, 16.6, 2.5, len / 2, d.style === 'tunnel' ? hex(0x30343c) : K.dark, { bevel: 0.1 });
+  B.prop.box(0, y + 2.5, z, W + 1, 2.5, len / 2, d.style === 'tunnel' ? hex(0x30343c) : K.dark, { bevel: 0.1 });
   if (d.style === 'tunnel') {
     for (const s of [-1, 1]) {
-      B.prop.box(s * 14.3, (y + 5) / 2, z, 0.5, (y + 5) / 2, len / 2, hex(0x474b54), { bevel: 0.08 });
-      for (const k of every(d, 6, 12, a, b)) B.glow.box(s * 13.75, 3.4, Z(k), 0.04, 0.12, 2.2, [4.5, 4.2, 3.4]);
-      for (const k of every(d, 0, 4, a, b)) B.prop.box(s * 13.78, 0.6, Z(k), 0.02, 0.6, 1.9, (Math.round(k / 4) % 2) ? mulc(K.yellow, 0.7) : K.dark);
+      for (const k of every(d, 6, 12, a, b)) B.glow.box(s * (W - 0.05), 3.4, Z(k), 0.04, 0.12, 2.2, [4.5, 4.2, 3.4]);
+      for (const k of every(d, 0, 4, a, b)) B.prop.box(s * (W - 0.02), 0.6, Z(k), 0.02, 0.6, 1.9, (Math.round(k / 4) % 2) ? mulc(K.yellow, 0.7) : K.dark);
     }
-    for (const k of every(d, 4, 14, a, b)) for (const x of [-6, 6]) B.glow.box(x, y - 0.06, Z(k), 0.3, 0.04, 2.4, [6, 6, 5.6]);
-    for (const k of every(d, 20, 60, a, b)) { B.metal.beam([-13.8, y - 0.3, Z(k)], [13.8, y - 0.3, Z(k)], 0.5, 0.5, K.metal); B.glow.box(0, y - 0.65, Z(k), 3, 0.25, 0.05, [0.3, 3.2, 1.2]); }
+    for (const k of every(d, 4, 14, a, b)) for (const x of [-W / 2, W / 2]) B.glow.box(x, y - 0.06, Z(k), 0.3, 0.04, 2.4, [6, 6, 5.6]);
+    for (const k of every(d, 20, 60, a, b)) { B.metal.beam([-W, y - 0.3, Z(k)], [W, y - 0.3, Z(k)], 0.5, 0.5, K.metal); B.glow.box(0, y - 0.65, Z(k), 3, 0.25, 0.05, [0.3, 3.2, 1.2]); }
   } else {
-    for (const k of every(d, 2, d.every || 3.2, a, b, 1)) for (let x = -15.5; x <= 15.5; x += 1.55) { B.metal.save().translate(x, y, Z(k)).rotX(Math.PI).cone(0, 0, 0, 0.3, d.spikes || 1.1, 4, mixc(K.steel, K.red, 0.25)); B.metal.restore(); }
-    for (const k of every(d, 5, 9, a, b)) B.glow.box(0, y - 0.05, Z(k), 14, 0.04, 0.12, K.orange3);
+    for (const k of every(d, 2, d.every || 3.2, a, b, 1)) for (let x = -W + 0.6; x <= W - 0.6; x += 1.55) { B.metal.save().translate(x, y, Z(k)).rotX(Math.PI).cone(0, 0, 0, 0.3, d.spikes || 1.1, 4, mixc(K.steel, K.red, 0.25)); B.metal.restore(); }
+    for (const k of every(d, 5, 9, a, b)) B.glow.box(0, y - 0.05, Z(k), W - 2, 0.04, 0.12, K.orange3);
   }
 }
 function laserfix(B, d) {
@@ -309,18 +301,16 @@ function laserfix(B, d) {
 function piperack(B, d) {
   const z = Z(d.s);
   for (const dy of [-0.38, 0, 0.38]) B.metal.beam([d.x0, d.y + dy, z], [d.x1, d.y + dy, z], 0.4, 0.34, mixc(K.steel, K.orange, 0.15 + dy));
-  for (const s of [-1, 1]) B.metal.box(s * 16, d.y / 2, z, 0.3, d.y / 2, 0.4, K.metal);
-  for (let x = -14; x <= 14; x += 7) { B.metal.box(x, d.y, z, 0.12, 0.7, 0.55, K.yellow); }
+  for (let x = d.x0 + 2; x <= d.x1 - 2; x += 7) { B.metal.box(x, d.y, z, 0.12, 0.7, 0.55, K.yellow); }
 }
 function arch(B, d) {
-  const z = Z(d.s), y = d.y;
-  B.metal.box(0, y, z, 14.5, 0.8, 0.9, K.steel, { bevel: 0.1 });
+  const z = Z(d.s), y = d.y, W = d.w || 14.5;
+  B.metal.box(0, y, z, W, 0.8, 0.9, K.steel, { bevel: 0.1 });
   for (const s of [-1, 1]) {
-    B.metal.beam([s * 14.5, y, z], [s * 12.6, 0.6, z], 0.35, 0.35, K.steel);
-    B.metal.beam([s * 14.5, y, z], [s * 9, y + 14, z], 0.5, 0.5, K.steel);
-    for (const x of [4, 8, 11]) B.metal.beam([s * x, y, z], [s * x, 0.8, z], 0.08, 0.08, mulc(K.steel, 0.7));
+    B.metal.beam([s * W, y, z], [s * (W - 3), y + 14, z], 0.5, 0.5, K.steel);
+    for (const x of [W * 0.3, W * 0.6]) B.metal.beam([s * x, y, z], [s * x * 0.7, y + 9, z], 0.12, 0.12, mulc(K.steel, 0.7));
   }
-  B.glow.box(0, y - 0.9, z, 14, 0.05, 0.05, [6, 0.6, 0.6]);
+  B.glow.box(0, y - 0.9, z, W - 0.5, 0.05, 0.05, [6, 0.6, 0.6]);
 }
 function wire(B, d, ctx) {
   const z = Z(d.s);
@@ -329,10 +319,10 @@ function wire(B, d, ctx) {
   if (d.sparks) ctx.sparks.push([0, d.y, z, d.x0, d.x1]);
 }
 function signgantry(B, d, ctx) {
-  const z = Z(d.s);
-  for (const s of [-1, 1]) B.metal.box(s * 13, 3.5, z, 0.3, 3.5, 0.3, K.metal, { bevel: 0.05 });
-  B.metal.box(0, 7, z, 13, 0.9, 0.5, K.dark, { bevel: 0.06 });
-  ctx.signs.push({ x: 0, y: 7, z: z + 0.52, w: 22, h: 1.5, ry: 0, text: '▶ DOWNTOWN  12 km', color: '#39ff88', fixed: true, nx: 1 });
+  const z = Z(d.s), W = (d.w || 12.7) + 0.3;
+  for (const s of [-1, 1]) B.metal.box(s * W, 3.5, z, 0.3, 3.5, 0.3, K.metal, { bevel: 0.05 });
+  B.metal.box(0, 7, z, W, 0.9, 0.5, K.dark, { bevel: 0.06 });
+  ctx.signs.push({ x: 0, y: 7, z: z + 0.52, w: Math.min(22, 2 * W - 2), h: 1.5, ry: 0, text: '▶ NEXT EXIT', color: '#39ff88', fixed: true, nx: 1 });
 }
 function rail(B, d) {
   const [a, b] = clipOf(d), c = Z((a + b) / 2), hz = (b - a) / 2;

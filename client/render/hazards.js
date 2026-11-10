@@ -59,18 +59,30 @@ export class HazardView {
   cached(key, fn) { let g = this.geoCache.get(key); if (!g) { g = fn(); this.geoCache.set(key, g); } return g; }
   mesh(geo, mat, parent, cast = false) { const m = new this.THREE.Mesh(geo, mat); m.castShadow = cast; if (parent) parent.add(m); return m; }
 
+  // 로컬(펼친) 좌표 → 월드: 경로 조각의 변환
+  toW(fr, p) { if (!fr) return p; const a = -p[2] - fr.s0, c = Math.cos(fr.h), s = Math.sin(fr.h); return [fr.ox + a * s + p[0] * c, p[1] + fr.y, fr.oz - a * c + p[0] * s]; }
+  // 효과(불꽃/증기/스파크/먼지)를 로컬 좌표로 부르면 월드로 바꿔 전달하는 대리 객체
+  fxFor(fr) {
+    const fx = this.realFx, T = (p) => this.toW(fr, p);
+    return { flame: (p, ...a) => fx.flame(T(p), ...a), steam: (p, ...a) => fx.steam(T(p), ...a), spark: (p, ...a) => fx.spark(T(p), ...a), dust: (p, ...a) => fx.dust(T(p), ...a), exhaustJet: (p, ...a) => fx.exhaustJet(T(p), ...a), smoke: fx.smoke };
+  }
   update(T, camS, dt) {
     this.audio.length = 0;
+    if (!this.realFx) this.realFx = this.fx;
     for (const e of this.map.dynamics) {
       const s0 = -e.zr[1], s1 = -e.zr[0];
       const near = s1 > camS - 170 && s0 < camS + 380;
       let v = this.active.get(e.id);
       if (near) {
-        if (!v) { v = this.create(e); if (!v) continue; this.active.set(e.id, v); }
+        this.fx = e.fr ? (e._fxp || (e._fxp = this.fxFor(e.fr))) : this.realFx;
+        if (!v) { v = this.create(e); if (!v) { this.fx = this.realFx; continue; } this.active.set(e.id, v); }
         this.out.length = 0;
         const st = {};
         evalEntity(e, T, this.out, st);
+        const n0 = this.audio.length;
         v.update(T, st, dt, e);
+        if (e.fr) for (let i = n0; i < this.audio.length; i++) { const a = this.audio[i], w = this.toW(e.fr, [a.x || 0, a.y || 0, a.z || 0]); a.x = w[0]; a.y = w[1]; a.z = w[2]; }
+        this.fx = this.realFx;
       } else if (v) { v.dispose(); this.active.delete(e.id); }
     }
   }
@@ -80,11 +92,14 @@ export class HazardView {
   create(e) {
     const f = this['make_' + e.type];
     if (!f) return null;
-    const group = new this.THREE.Group();
-    this.scene.add(group);
+    // 바깥 그룹 = 경로 조각의 위치/방향, 안쪽 그룹 = 로컬(펼친) 좌표계
+    const outer = new this.THREE.Group(), group = new this.THREE.Group();
+    if (e.fr) { outer.position.set(e.fr.ox, e.fr.y, e.fr.oz); outer.rotation.y = -e.fr.h; group.position.z = e.fr.s0; }
+    outer.add(group);
+    this.scene.add(outer);
     const own = [];
     const v = f.call(this, e, group, own);
-    v.dispose = () => { this.scene.remove(group); for (const o of own) o.dispose(); };
+    v.dispose = () => { this.scene.remove(outer); for (const o of own) o.dispose(); };
     return v;
   }
 
@@ -308,9 +323,10 @@ export class HazardView {
     }
     const rope = this.mesh(this.unitBox, this.M.rope, group), ball = this.mesh(this.sphere, this.stripeMat, group, true);
     ball.scale.setScalar(e.r);
-    const tower = this.mesh(this.unitBox, this.M.steel, group); tower.scale.set(1.2, e.py + 3, 1.2); tower.position.set(-15.6, (e.py + 3) / 2, e.z);
-    const jib = this.mesh(this.unitBox, this.M.steel, group), jl = Math.abs(e.px + 15.6) + 1; jib.scale.set(jl, 0.6, 0.6); jib.position.set(-15.6 + jl / 2, e.py + 0.3, e.z);
-    const cab = this.mesh(this.unitBox, this.M.amber, group); cab.scale.set(0.5, 0.5, 0.5); cab.position.set(-15.6, e.py + 3.3, e.z);
+    const tx = e.tx !== undefined ? e.tx : -15.6;
+    const tower = this.mesh(this.unitBox, this.M.steel, group); tower.scale.set(1.2, e.py + 3, 1.2); tower.position.set(tx, (e.py + 3) / 2, e.z);
+    const jib = this.mesh(this.unitBox, this.M.steel, group), jl = Math.abs(e.px - tx) + 1; jib.scale.set(jl, 0.6, 0.6); jib.position.set(tx + jl / 2, e.py + 0.3, e.z);
+    const cab = this.mesh(this.unitBox, this.M.amber, group); cab.scale.set(0.5, 0.5, 0.5); cab.position.set(tx, e.py + 3.3, e.z);
     return { update: (T, st) => {
       const th = st.th;
       ball.position.set(st.ball[0], st.ball[1], st.ball[2]); ball.rotation.y += 0.01;
@@ -359,9 +375,10 @@ export class HazardView {
     const rails = [-0.75, 0.75].map((dz) => { const r = this.mesh(this.unitBox, M.steel, group); r.scale.set(60, 0.14, 0.14); r.position.set(0, 0.07, e.z + dz); return r; });
     for (let x = -28; x <= 28; x += 1.4) { const s = this.mesh(this.unitBox, M.dark, group); s.scale.set(0.3, 0.1, 2.2); s.position.set(x, 0.03, e.z); }
     const za = e.z + 4;
-    const post = [-1, 1].map((s) => { const p = this.mesh(this.unitBox, M.dark, group); p.scale.set(0.3, 3.4, 0.3); p.position.set(s * 12.9, 1.7, za); const l = this.mesh(this.unitBox, M.warn.clone(), group); own.push(l.material); l.scale.set(0.5, 0.4, 0.4); l.position.set(s * 12.9, 3.5, za); return l; });
+    const PX = e.post || 12.9;
+    const post = [-1, 1].map((s) => { const p = this.mesh(this.unitBox, M.dark, group); p.scale.set(0.3, 3.4, 0.3); p.position.set(s * PX, 1.7, za); const l = this.mesh(this.unitBox, M.warn.clone(), group); own.push(l.material); l.scale.set(0.5, 0.4, 0.4); l.position.set(s * PX, 3.5, za); return l; });
     const armG = [0, 1].map((i) => { const g = new THREE.BoxGeometry(12, 0.24, 0.14); g.translate(i === 0 ? 6 : -6, 0, 0); own.push(g); return g; });
-    const arms = armG.map((g, i) => { const m = new THREE.Mesh(g, this.stripeMat); m.position.set(i === 0 ? -12.4 : 12.4, 0.95, za); m.castShadow = true; group.add(m); return m; });
+    const arms = armG.map((g, i) => { const m = new THREE.Mesh(g, this.stripeMat); m.position.set(i === 0 ? -PX + 0.5 : PX - 0.5, 0.95, za); m.scale.x = (PX - 0.5) / 12.4; m.castShadow = true; group.add(m); return m; });
     const cars = []; for (let k = 0; k < e.cars; k++) { const c = new THREE.Group(), body = this.mesh(this.unitBox, k === 0 ? M.trainR : M.train, c, true); body.scale.set(e.carLen, 4.2, 3); body.position.y = 2.1; const roof = this.mesh(this.unitBox, M.dark, c); roof.scale.set(e.carLen * 0.9, 0.3, 2.2); roof.position.y = 4.35; group.add(c); cars.push(c); }
     const head = this.mesh(this.unitBox, M.amber.clone(), group); own.push(head.material); head.scale.set(0.3, 0.5, 1.6);
     return { update: (T, st) => {

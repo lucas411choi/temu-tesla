@@ -147,6 +147,10 @@ input:focus, select:focus { border-color: var(--neon); box-shadow: 0 0 12px rgba
 .cap { height: 46px; display: flex; align-items: center; justify-content: center; font: 900 20px var(--mono); border: 2px solid #26324a; color: #4b5b7a; background: #0b1020; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
 .cap.mine { color: #fff; border-color: var(--neon); background: rgba(53, 240, 255, .14); } .cap.on { background: var(--neon); color: #001018; box-shadow: 0 0 22px var(--neon); transform: translateY(2px); }
 #keys-who { color: var(--pink); margin-left: 6px; }
+.cap.space { height: 32px; margin-top: 6px; font-size: 13px; letter-spacing: .1em; }
+.hud-btn { position: absolute; left: 14px; top: 64px; pointer-events: auto; font: 700 14px var(--ui); letter-spacing: .08em; color: var(--txt); background: rgba(7, 11, 22, .82); border: 1px solid var(--line); padding: 6px 12px; cursor: pointer; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+.hud-btn:hover { background: rgba(53, 240, 255, .2); }
+.btnrow.col { flex-direction: column; } .btnrow.col .btn { width: 100%; }
 #hud-alt { right: 14px; top: 96px; width: 78px; text-align: center; } #alt-bar { position: relative; width: 22px; height: 200px; margin: 0 auto 6px; background: rgba(255, 255, 255, .1); border: 1px solid var(--line); } #alt-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, #1fb8c8, var(--neon)); } #alt-mark { position: absolute; left: -6px; right: -6px; height: 2px; background: #fff; bottom: 0; box-shadow: 0 0 8px #fff; }
 #alt-val { display: block; font: 800 16px var(--mono); } #speed-val { font-size: 11px; color: var(--dim); }
 #hint { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); max-width: min(760px, 70vw); padding: 12px 20px; background: rgba(5, 10, 20, .8); border: 1px solid var(--neon); border-left-width: 5px; font-size: 16px; line-height: 1.6; text-align: left; white-space: pre-line; }

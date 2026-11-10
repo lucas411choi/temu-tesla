@@ -1,6 +1,6 @@
-// 키보드 입력: q w a s (바퀴) / e r d f (배출구). 서버가 자기 담당 키만 받으므로 클라이언트도 담당 키만 보낸다.
+// 키보드 입력: q w (왼쪽/오른쪽 전진) a s (왼쪽/오른쪽 후진) / e r d f (배출구) / 스페이스 (브레이크). 서버가 자기 담당 키만 받으므로 클라이언트도 담당 키만 보낸다.
 // 자폭 부활: R 은 배출구 키이므로 Shift+R 또는 Backspace 를 0.7초 누르고 있기
-const CODES = { KeyQ: 1, KeyW: 2, KeyA: 4, KeyS: 8, KeyE: 16, KeyR: 32, KeyD: 64, KeyF: 128 };
+const CODES = { KeyQ: 1, KeyW: 2, KeyA: 4, KeyS: 8, KeyE: 16, KeyR: 32, KeyD: 64, KeyF: 128, Space: 256 };
 
 export class Input {
   constructor(onMask, onSuicide) {

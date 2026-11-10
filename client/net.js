@@ -74,7 +74,7 @@ export class Interp {
     const q = qSlerp(a.q, b.q, Math.min(1, k));
     return {
       T, p: [L(a.p[0], b.p[0]), L(a.p[1], b.p[1]), L(a.p[2], b.p[2])], q, v: [L(a.v[0], b.v[0]), L(a.v[1], b.v[1]), L(a.v[2], b.v[2])],
-      f: b.f, lk: b.lk, ex: b.ex, k: b.k, cp: b.cp, d: b.d, el: b.el, inv: b.inv, ph: b.ph, cd: b.cd, g: b.g,
+      f: b.f, lk: b.lk, ex: b.ex, k: b.k, cp: b.cp, d: b.d, el: b.el, inv: b.inv, ph: b.ph, cd: b.cd, g: b.g, s: b.s !== undefined && a.s !== undefined && Math.abs(b.s - a.s) < 60 ? L(a.s, b.s) : b.s,
     };
   }
 }

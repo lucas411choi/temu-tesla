@@ -7,10 +7,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CFG } from '../shared/config.js';
 import { getMap } from '../shared/mapData.js';
-import { createWorld } from '../shared/world.js';
+import { createStraightWorld } from '../shared/world.js';
 import { createCar, stepCar, carOBBs } from '../shared/physics.js';
 import { CarSim } from '../shared/sim.js';
-import { MapBuilder } from '../shared/maps/lib.js';
+import { MapBuilder, straightGround } from '../shared/maps/lib.js';
 import { bestFlight } from './autopilot.js';
 
 const FAST = process.argv.includes('--fast');
@@ -58,9 +58,8 @@ for (let i = 1; i < cpS.length; i++) if (cpS[i] - cpS[i - 1] > 320) warn(`체크
 // ───────────────── 2) 정적 통과 가능성 ─────────────────
 head('2) 정적 장애물 통과 가능성 (모든 s에서 2.3m×1.3m 이상 빈 단면이 있는가)');
 {
-  const world = createWorld({ statics: [], dynamics: [], ground: map.ground });
   const items = [];
-  for (const s of map.statics) {
+  for (const s of map.localStatics) {
     if (s.tag === 'ledge') continue;
     if (s.k === 's') items.push({ x0: s.c[0] - s.r, x1: s.c[0] + s.r, y0: s.c[1] - s.r, y1: s.c[1] + s.r, s0: -s.c[2] - s.r, s1: -s.c[2] + s.r });
     else {
@@ -77,11 +76,12 @@ head('2) 정적 장애물 통과 가능성 (모든 s에서 2.3m×1.3m 이상 빈
     const near = items.filter((it) => it.s0 <= s && it.s1 >= s);
     if (!near.length) continue;
     checked++;
-    const g = map.ground.find((q) => s >= q.s0 && s < q.s1);
-    const lim = Math.min(Number.isFinite(g.wall) ? g.wall : g.half, g.half + 3) - CW - 0.1;
+    const g = map.ground.find((q) => s >= q.s0 && s < q.s1) || map.ground[map.ground.length - 1];
+    const lim = Math.max(0, g.half - CW - 0.1);
     let free = false;
-    for (let x = -lim; x <= lim + 1e-6 && !free; x += 0.5) {
-      const yBase = g.solid ? g.y + 0.5 : 0.55;
+    for (let x = -lim; x <= lim + 1e-6 && !free; x += 0.25) {
+      const gy = g.y1 !== undefined ? g.y + (g.y1 - g.y) * (s - g.s0) / (g.s1 - g.s0) : g.y;
+      const yBase = gy + 0.55;
       for (let y = yBase; y <= yBase + 40 && !free; y += 0.5) {
         let hit = false;
         for (const it of near) if (x + CW > it.x0 && x - CW < it.x1 && y + CH > it.y0 && y - CH < it.y1) { hit = true; break; }
@@ -99,12 +99,14 @@ head('3) 동적 장애물 통과 가능성 (지상 직선 주행/고정 고도 �
   const probeSpeed = 7, dt = 1 / 20;
   const period = (e) => Math.max(e.P || 0, e.per || 0, e.blink ? e.blink.P : 0, e.type === 'laser' && e.mode === 'scan' ? (2 * Math.PI) / Math.abs(e.w) : 0, 8);
   const typeStat = {};
-  const lanesG = [-11, -8, -5, -2, 1, 4, 7, 10], altsA = [2.6, 4, 6, 8, 11, 15, 20, 28], lanesA = [-8, 0, 8];
+  const altsA = [2.6, 4, 6, 8, 11, 15, 20, 28];
   let flagged = 0;
   const t0 = Date.now();
   for (const e of map.dynamics) {
-    const w = createWorld({ statics: [], dynamics: [e], ground: [{ s0: -1000, s1: 1e6, y: 0, solid: true, half: 40, wall: Infinity }] });
+    const w = createStraightWorld({ statics: [], dynamics: [e], ground: [{ s0: -1000, s1: 1e6, y: 0, solid: true, half: 40, wall: Infinity }] });
     const sa = -e.zr[1] - 30, sb = -e.zr[0] + 30, P = period(e);
+    const gHalf = (map.ground.find((q) => -(e.zr[0] + e.zr[1]) / 2 >= q.s0 && -(e.zr[0] + e.zr[1]) / 2 < q.s1) || { half: 8 }).half;
+    const lanesG = [...Array(8)].map((_, i) => -gHalf + 1.05 + (i * (2 * gHalf - 2.1)) / 7), lanesA = [-gHalf + 1.2, 0, gHalf - 1.2];
     const run = (x, y, tau0) => {
       const sim = new CarSim(w);
       sim.car.p = [x, y, -sa]; sim.car.q = [0, 0, 0, 1];
@@ -179,7 +181,7 @@ let vTop = 0;
 {
   const w = { groundY: () => 0, refY: () => 0 };
   const c = createCar(0, 0.6, 0, 0), dt = 1 / 240;
-  for (let i = 0; i < 25 / dt; i++) stepCar(c, { whl: [true, true, true, true], exh: [false, false, false, false] }, dt, w);
+  for (let i = 0; i < 25 / dt; i++) stepCar(c, { whl: [1, 1, 1, 1], exh: [false, false, false, false] }, dt, w);
   vTop = Math.hypot(c.v[0], c.v[2]);
   console.log(`  지면 최고속도 ${vTop.toFixed(2)} m/s (${(vTop * 3.6).toFixed(0)} km/h)`);
   // 4개 전부 최대 상승: 연료가 바닥날 때까지
@@ -196,8 +198,9 @@ let vTop = 0;
   // 자동조종 기준 최대 체공 거리 (틈 길이를 늘려가며 100% 이내인 최대값)
   let best = 0;
   for (let len = 40; len <= 140; len += 5) {
-    const B = new MapBuilder(1); B.begin(1, 'cal', 0, 1000, {}, {}); B.gapFlight(300, len, { v0: 9 });
-    const m = { statics: B.statics, ground: B.finalizeGround(1000), flights: B.flights };
+    const B = new MapBuilder(1); B.begin(1, 'cal', {}); B.run(300, { w: 8 }); B.jump(len, { v0: 9 }); B.run(80); B.end();
+    const fin = B.finalize();
+    const m = { localStatics: fin.localStatics, ground: straightGround(B.route), flights: B.flights };
     const r = bestFlight(m, m.flights[0]);
     if (r.ok && r.fuelUsed <= 100) best = len; else if (!r.ok || r.fuelUsed > 100) break;
   }

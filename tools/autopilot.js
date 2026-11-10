@@ -2,22 +2,22 @@
 // - 수직: "예측 바닥 추종" (지금 상태로 가만히 두면 바닥 밴드 아래로 떨어질 때만 점화 → 포물선 비행 + 필요한 만큼만 연료 사용)
 // - 자세: 롤/피치 PD → 4개 모서리 추력 배분 → 시그마델타로 켜짐/꺼짐 키 입력으로 변환 (사람이 키를 두드리는 것과 같음)
 import { CFG } from '../shared/config.js';
-import { createWorld } from '../shared/world.js';
+import { createStraightWorld } from '../shared/world.js';
 import { CarSim } from '../shared/sim.js';
 import { qToMat3, clamp } from '../shared/math.js';
 
 const G = CFG.G, M = CFG.CAR.mass, I = CFG.CAR.inertia, TMAX = CFG.THRUST.perExhaust;
 const HZ = Math.abs(CFG.CAR.corners[0][2]), HX = Math.abs(CFG.CAR.corners[0][0]);
 
-// 비행 하나만 따로 떼어낸 월드 (해당 비행의 정적 장애물 + 천장)
+// 비행 하나만 따로 떼어낸 월드 (해당 비행의 정적 장애물 + 천장). 경로를 직선으로 펼친 좌표에서 시험한다.
 export function flightWorld(map, f) {
   const lo = f.sStart - 6, hi = f.sEnd + 6;
-  const statics = map.statics.filter((s) => {
+  const statics = (map.localStatics || map.statics).filter((s) => {
     const sMin = -s.c[2] - (s.br || 0), sMax = -s.c[2] + (s.br || 0);
     if (sMax < lo || sMin > hi) return false;
-    return s.fid === f.id || s.tag === 'ceiling' || (s.tag === 'spike' && s.c[1] > 2);
+    return s.fid === f.id || s.tag === 'ceiling' || (s.tag === 'spike' && s.h[1] < 1.5 && s.c[1] - s.h[1] > -0.5 + (s.c[1] > 2 ? 0 : 99));
   });
-  return createWorld({ statics, dynamics: [], ground: map.ground });
+  return createStraightWorld({ statics, dynamics: [], ground: map.ground });
 }
 
 function makeController(f, world, P) {
@@ -85,7 +85,7 @@ function makeController(f, world, P) {
       if (acc[i] >= 1) { mask |= 16 << i; acc[i] -= 1; }
     }
     // 지면에서는 바퀴로 접근 속도 유지
-    if (grounded && vs < f.v0 - 0.2 && s < f.sEnd + 6) mask |= 15;
+    if (grounded && vs < f.v0 - 0.2 && s < f.sEnd + 6) mask |= 3;          // q+w = 양쪽 바퀴 전진
     return mask;
   };
 }

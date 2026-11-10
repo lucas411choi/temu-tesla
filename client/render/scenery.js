@@ -37,29 +37,20 @@ function parkgate(B, d, ctx) {
 
 // ───────── 공사장 ─────────
 function skel(B, d, ctx) {
-  const rng = makeRng(d.seed), side = d.side, z = Z(d.s), hz = d.w / 2, x0 = 17, x1 = 17 + d.d, cx = side * (x0 + x1) / 2, hx = d.d / 2;
+  const rng = makeRng(d.seed), side = d.side, z = Z(d.s), hz = d.w / 2, x0 = d.x0 || 17, x1 = x0 + d.d, cx = side * (x0 + x1) / 2, hx = d.d / 2, base = d.base || 0;
   const done = d.h * d.done, fl = 3.6;
-  // 기둥 (전체 높이)
-  for (let x = x0 + 0.6; x <= x1 - 0.5; x += Math.max(5, d.d / 4)) for (let k = -hz + 0.6; k <= hz - 0.5; k += Math.max(5, d.w / 5)) {
-    B.prop.box(side * x, d.h / 2, z + k, 0.4, d.h / 2, 0.4, mulc(K.conc, 0.95));
-  }
-  // 슬래브 (완성된 층까지)
-  for (let y = fl; y <= done; y += fl) B.prop.box(cx, y, z, hx, 0.18, hz, mulc(K.concD, 0.9 + rng() * 0.15));
-  // 미완성 층: 철골 보만
-  for (let y = Math.ceil(done / fl) * fl; y <= d.h; y += fl) { B.metal.box(cx, y, z - hz + 0.3, hx, 0.12, 0.12, mulc(K.orange, 0.8)); B.metal.box(cx, y, z + hz - 0.3, hx, 0.12, 0.12, mulc(K.orange, 0.8)); B.metal.box(side * (x0 + 0.3), y, z, 0.12, 0.12, hz, mulc(K.orange, 0.8)); }
-  // 내부 어두운 코어 + 작업등
-  B.prop.box(cx + side * 2, done / 2, z, hx * 0.5, done / 2, hz * 0.45, mulc(K.dark, 0.8));
-  for (let y = fl * 1.5; y < done; y += fl * (2 + Math.floor(rng() * 3))) B.glow.box(side * (x0 + 1.5), y, z + (rng() - 0.5) * hz, 0.2, 0.1, 0.5, [5, 4.2, 2.6]);
-  // 도로 쪽 비계 + 안전망
+  for (let x = x0 + 0.6; x <= x1 - 0.5; x += Math.max(5, d.d / 4)) for (let k = -hz + 0.6; k <= hz - 0.5; k += Math.max(5, d.w / 5)) B.prop.box(side * x, base + d.h / 2, z + k, 0.4, d.h / 2, 0.4, mulc(K.conc, 0.95));
+  for (let y = fl; y <= done; y += fl) B.prop.box(cx, base + y, z, hx, 0.18, hz, mulc(K.concD, 0.9 + rng() * 0.15));
+  for (let y = Math.ceil(done / fl) * fl; y <= d.h; y += fl) { B.metal.box(cx, base + y, z - hz + 0.3, hx, 0.12, 0.12, mulc(K.orange, 0.8)); B.metal.box(cx, base + y, z + hz - 0.3, hx, 0.12, 0.12, mulc(K.orange, 0.8)); B.metal.box(side * (x0 + 0.3), base + y, z, 0.12, 0.12, hz, mulc(K.orange, 0.8)); }
+  B.prop.box(cx + side * 2, base + done / 2, z, hx * 0.5, done / 2, hz * 0.45, mulc(K.dark, 0.8));
+  for (let y = fl * 1.5; y < done; y += fl * (2 + Math.floor(rng() * 3))) B.glow.box(side * (x0 + 1.5), base + y, z + (rng() - 0.5) * hz, 0.2, 0.1, 0.5, [5, 4.2, 2.6]);
   const fx = side * (x0 - 0.08);
-  for (let k = -hz; k <= hz + 0.01; k += 2.5) B.metal.box(fx, done / 2, z + k, 0.05, done / 2, 0.05, K.steel);
-  for (let y = 2; y < done; y += 2) B.metal.box(fx, y, z, 0.05, 0.05, hz, K.steel);
-  if (d.net) {
-    const col = rng() < 0.5 ? [0.05, 0.28, 0.12] : [0.06, 0.16, 0.36];
-    B.net.box(side * (x0 - 0.18), done / 2, z, 0.02, done / 2, hz, col);
-  } else B.prop.box(side * (x0 + 0.2), Math.min(done, 8) / 2, z, 0.05, Math.min(done, 8) / 2, hz, mulc(K.white, 0.75));
-  // 옥상 경고등
-  B.glow.box(side * (x0 + 0.5), d.h + 0.3, z - hz + 0.5, 0.18, 0.18, 0.18, K.red3); ctx.beacons.push([side * (x0 + 0.5), d.h + 0.3, z - hz + 0.5]);
+  for (let k = -hz; k <= hz + 0.01; k += 2.5) B.metal.box(fx, base + done / 2, z + k, 0.05, done / 2, 0.05, K.steel);
+  for (let y = 2; y < done; y += 2) B.metal.box(fx, base + y, z, 0.05, 0.05, hz, K.steel);
+  if (d.net) B.net.box(side * (x0 - 0.18), base + done / 2, z, 0.02, done / 2, hz, rng() < 0.5 ? [0.05, 0.28, 0.12] : [0.06, 0.16, 0.36]);
+  // 미완성 층(골조만 있는 위쪽)도 충돌 상자에 포함되므로 안전망으로 덮어 보이게 한다
+  B.net.box(side * (x0 - 0.18), base + (done + d.h) / 2, z, 0.02, (d.h - done) / 2, hz, [0.08, 0.2, 0.1]);
+  B.glow.box(side * (x0 + 0.5), base + d.h + 0.3, z - hz + 0.5, 0.18, 0.18, 0.18, K.red3); ctx.beacons.push([side * (x0 + 0.5), base + d.h + 0.3, z - hz + 0.5]);
 }
 function hoard(B, d) {
   const [a, b] = clipOf(d), zc = Z((a + b) / 2), hz = (b - a) / 2;
@@ -71,29 +62,20 @@ function hoard(B, d) {
   }
 }
 function sitegate(B, d, ctx) {
-  const z = Z(d.s);
-  for (const s of [-1, 1]) B.prop.box(s * 17.2, 6.75, z, 0.55, 6.75, 0.6, mulc(K.yellow, 0.9), { bevel: 0.06 });
-  B.stripe.box(0, 12.6, z, 16.8, 0.9, 0.6, [1, 1, 1], { uv: [2.6, 2.6] });
-  ctx.signs.push({ x: 0, y: 12.6, z: z + 0.62, w: 14, h: 1.5, ry: 0, text: 'TEMU 건설 현장 · 안전제일', color: '#ffd24a', fixed: true });
-  for (let x = -15; x <= 15; x += 5) B.glow.box(x, 11.62, z + 0.4, 0.15, 0.06, 0.15, K.orange3);
+  const z = Z(d.s), W = (d.w || 16.6) + 0.6;
+  for (const s of [-1, 1]) B.prop.box(s * W, 6.75, z, 0.55, 6.75, 0.6, mulc(K.yellow, 0.9), { bevel: 0.06 });
+  B.stripe.box(0, 12.6, z, W - 0.2, 0.9, 0.6, [1, 1, 1], { uv: [2.6, 2.6] });
+  ctx.signs.push({ x: 0, y: 12.6, z: z + 0.62, w: Math.min(14, 2 * W - 2), h: 1.5, ry: 0, text: 'TEMU 건설 현장 · 안전제일', color: '#ffd24a', fixed: true });
 }
 function crane(B, d, ctx) {
-  const z = Z(d.s), sd = d.side, mx = d.x, y = d.y, top = d.top + 6, col = mulc(K.yellow, 0.95);
-  // 마스트 (격자: 4개 기둥 + 사선)
-  for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B.metal.box(mx + ox * 0.9, top / 2, z + oz * 0.9, 0.09, top / 2, 0.09, col);
-  for (let yy = 0; yy < top - 2; yy += 2.4) { B.metal.beam([mx - 0.9, yy, z - 0.9], [mx + 0.9, yy + 2.4, z - 0.9], 0.05, 0.05, col); B.metal.beam([mx - 0.9, yy, z + 0.9], [mx + 0.9, yy + 2.4, z + 0.9], 0.05, 0.05, col); }
-  // 지브 (도로 위 트러스: y ~ y+1.8)
-  const xa = mx + sd * 11, xb = -sd * 19.5;
+  const z = Z(d.s), sd = d.side, mx = d.x, y = d.y, top = d.top, col = mulc(K.yellow, 0.95), W = d.w || 16.6;
+  B.metal.box(mx, top / 2, z, 1.0, top / 2, 1.0, col);
+  for (let yy = 0; yy < top - 2; yy += 2.4) B.metal.beam([mx - 1.02, yy, z - 1.02], [mx + 1.02, yy + 2.4, z - 1.02], 0.06, 0.06, mulc(col, 0.7));
+  const xa = mx + sd * 8, xb = -sd * (W + 1);
   for (const [yy, zz] of [[y, -0.85], [y, 0.85], [y + 1.8, 0]]) B.metal.beam([xa, yy, z + zz], [xb, yy, z + zz], 0.12, 0.12, col);
-  for (let t = 0; t < 1; t += 0.05) { const x0 = xa + (xb - xa) * t, x1 = xa + (xb - xa) * (t + 0.05); B.metal.beam([x0, y, z - 0.85], [x1, y + 1.8, z], 0.05, 0.05, col); B.metal.beam([x0, y, z + 0.85], [x1, y + 1.8, z], 0.05, 0.05, col); }
-  B.stripe.box(-sd * 15, y + 0.9, z, 1.4, 0.9, 0.9, [1, 1, 1], { uv: [2.6, 2.6] });
-  // 꼭대기(에이프레임) + 당김줄 + 운전석 + 평형추
-  B.metal.beam([mx, y + 1.8, z], [mx, y + 8, z], 0.2, 0.2, col);
-  B.metal.beam([mx, y + 8, z], [xb, y + 1.8, z], 0.04, 0.04, K.dark); B.metal.beam([mx, y + 8, z], [xa, y + 1.8, z], 0.04, 0.04, K.dark);
-  B.prop.box(mx - sd * 1.4, y - 1.0, z, 1.0, 1.0, 1.0, mulc(K.white, 0.9)); B.glass.box(mx - sd * 2.42, y - 0.9, z, 0.02, 0.7, 0.8, hex(0x16324a));
+  for (let t = 0; t < 1; t += 0.06) { const x0 = xa + (xb - xa) * t, x1 = xa + (xb - xa) * (t + 0.06); B.metal.beam([x0, y, z - 0.85], [x1, y + 1.8, z], 0.05, 0.05, col); B.metal.beam([x0, y, z + 0.85], [x1, y + 1.8, z], 0.05, 0.05, col); }
   B.prop.box(xa - sd * 1.5, y - 1.2, z, 1.4, 1.2, 1.1, K.concD);
-  B.glow.box(xb, y + 0.9, z, 0.2, 0.2, 0.2, K.red3); B.glow.box(mx, y + 8.2, z, 0.2, 0.2, 0.2, K.red3);
-  ctx.beacons.push([xb, y + 0.9, z], [mx, y + 8.2, z]);
+  B.glow.box(xb, y + 0.9, z, 0.2, 0.2, 0.2, K.red3); ctx.beacons.push([xb, y + 0.9, z]);
   if (d.hook) {
     B.metal.beam([d.hx, y, z], [d.hx, y - d.hook, z], 0.05, 0.05, K.dark);
     B.metal.box(d.hx, y - d.hook + 0.2, z, 0.3, 0.25, 0.3, K.yellow);
@@ -115,19 +97,15 @@ function pit(B, d) {
   for (let k = d.s0 + 5; k < d.s1; k += 6.5) { B.water.box(((k * 7) % 9) - 4.5 + (k % 2 ? 8 : -8), -9.98, Z(k), 2.2, 0.01, 1.4, [0.05, 0.1, 0.12]); for (let r = 0; r < 4; r++) B.metal.beam([-12 + r * 1.3 + (k % 5), -10, Z(k) - 1], [-11.5 + r * 1.3 + (k % 5), -8.4, Z(k) - 1.3], 0.04, 0.04, K.rust); }
 }
 function slabfloor(B, d) {
-  const len = d.s1 - d.s0, zc = Z((d.s0 + d.s1) / 2), hz = len / 2, y0 = d.y + 5;
-  for (let y = y0 + 3.6; y < d.top; y += 3.6) B.prop.box(0, y, zc, CORR, 0.18, hz, mulc(K.concD, 0.9));
-  for (let x = -14; x <= 14; x += 7) for (const k of [d.s0 + 2, (d.s0 + d.s1) / 2, d.s1 - 2]) B.prop.box(x, (y0 + d.top) / 2, Z(k), 0.4, (d.top - y0) / 2, 0.4, mulc(K.conc, 0.95));
-  B.prop.box(0, (y0 + d.top) / 2, zc, 10, (d.top - y0) / 2, hz * 0.6, mulc(K.dark, 0.7));
-  for (const e of [d.s0, d.s1]) {
-    const ze = Z(e) + (e === d.s0 ? 0.3 : -0.3);
-    B.net.box(0, (y0 + d.top) / 2, ze, CORR, (d.top - y0) / 2, 0.02, [0.05, 0.28, 0.12]);
-    B.stripe.box(0, d.y + 0.5, ze, CORR, 0.5, 0.05, [1, 1, 1], { uv: [2.6, 2.6] });
-  }
+  const len = d.s1 - d.s0, zc = Z((d.s0 + d.s1) / 2), hz = len / 2, y0 = d.y + 5, W = (d.w || 16.6) + 1, office = d.style === 'office';
+  for (let y = y0 + 3.6; y < d.top; y += 3.6) B.prop.box(0, y, zc, W, 0.18, hz, office ? mulc(K.white, 0.7) : mulc(K.concD, 0.9));
+  for (const x of [-W + 0.4, W - 0.4]) for (const k of [d.s0 + 2, (d.s0 + d.s1) / 2, d.s1 - 2]) B.prop.box(x, (y0 + d.top) / 2, Z(k), 0.4, (d.top - y0) / 2, 0.4, mulc(K.conc, 0.95));
+  if (office) { for (const s of [-1, 1]) B.bldg[0].box(s * W, (y0 + d.top) / 2, zc, 0.2, (d.top - y0) / 2, hz, [1, 1, 1], { uv: [25.6, 28.8] }); }
+  else for (const e of [d.s0, d.s1]) B.net.box(0, (y0 + d.top) / 2, Z(e) + (e === d.s0 ? 0.3 : -0.3), W, (d.top - y0) / 2, 0.02, [0.05, 0.28, 0.12]);
 }
-
 // ───────── 날먹 방지 구조물 ─────────
 function overpass(B, d, ctx) {
+  const CORR = d.w || 16.6;
   const z = Z(d.s), y = d.y;
   B.prop.box(0, y + 0.65, z, CORR + 0.4, 0.65, 2.0, mulc(K.conc, 0.9), { bevel: 0.08 });
   B.metal.box(0, y + 0.05, z, CORR + 0.3, 0.05, 1.9, K.dark);
@@ -139,6 +117,7 @@ function overpass(B, d, ctx) {
   if (d.sign) ctx.signs.push({ x: 0, y: y + 0.66, z: z + 2.03, w: 10, h: 1.0, ry: 0, text: d.sign, color: d.color || '#35f0ff', fixed: true });
 }
 function banner(B, d, ctx) {
+  const CORR = d.w || 16.6;
   const z = Z(d.s), yc = (d.y0 + d.y1) / 2, hy = (d.y1 - d.y0) / 2;
   B.metal.box(0, yc, z - 0.1, CORR, hy, 0.4, K.dark, { bevel: 0.05 });
   for (const yy of [d.y0, d.y1]) B.metal.box(0, yy, z, CORR + 0.2, 0.12, 0.5, K.steel);
@@ -146,6 +125,7 @@ function banner(B, d, ctx) {
   ctx.signs.push({ x: 0, y: yc, z: z + 0.52, w: 2 * CORR - 1, h: 2 * hy - 0.5, ry: 0, text: d.text, hue: d.hue, neon: true });
 }
 function skybridge(B, d) {
+  const CORR = d.w || 16.6;
   const z = Z(d.s), y = d.y, h = d.h, hz = d.d / 2, c = neon(d.hue, 2.4);
   B.glass.box(0, y + h / 2, z, CORR + 0.4, h / 2 - 0.15, hz - 0.1, hex(0x28466a));
   B.prop.box(0, y + 0.15, z, CORR + 0.4, 0.15, hz, mulc(K.white, 0.8)); B.prop.box(0, y + h - 0.15, z, CORR + 0.4, 0.15, hz, mulc(K.white, 0.8));
@@ -154,17 +134,17 @@ function skybridge(B, d) {
   for (let x = -12; x <= 12; x += 6) B.glow.box(x, y + h - 0.35, z, 0.8, 0.04, 0.25, [4, 4, 3.6]);
 }
 function powerline(B, d) {
-  const z = Z(d.s), ys = d.ys, top = ys[ys.length - 1] + 2;
+  const z = Z(d.s), ys = d.ys, top = ys[ys.length - 1] + 2, W = d.w || 22.6;
   for (const s of [-1, 1]) {
-    const x = s * 18.5;
+    const x = s * (W - 4);
     for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B.metal.beam([x + ox * 1.4, 0, z + oz * 1.4], [x + ox * 0.4, top, z + oz * 0.4], 0.12, 0.12, mulc(K.steel, 0.8));
-    for (let yy = 2; yy < top; yy += 3) { const w = 1.4 - (yy / top) * 1.0; B.metal.beam([x - w, yy, z - w], [x + w, yy + 3, z + w], 0.05, 0.05, mulc(K.steel, 0.7)); B.metal.beam([x + w, yy, z - w], [x - w, yy + 3, z + w], 0.05, 0.05, mulc(K.steel, 0.7)); }
-    for (const yy of ys) { B.metal.box(x, yy + 0.3, z, 3.2, 0.1, 0.1, mulc(K.steel, 0.8)); B.glass.cyl(x - s * 2.6, yy + 0.05, z, 0.12, 0.35, 6, hex(0x8a6a4a)); }
+    for (let yy = 2; yy < top; yy += 3) { const w = 1.4 - (yy / top) * 1.0; B.metal.beam([x - w, yy, z - w], [x + w, yy + 3, z + w], 0.05, 0.05, mulc(K.steel, 0.7)); }
     B.glow.box(x, top + 0.2, z, 0.18, 0.18, 0.18, K.red3);
   }
-  for (const yy of ys) B.metal.beam([-24, yy, z], [24, yy, z], 0.08, 0.08, K.dark);
+  for (const yy of ys) B.metal.beam([-W, yy, z], [W, yy, z], 0.08, 0.08, K.dark);
 }
 function pipebridge(B, d) {
+  const CORR = d.w || 16.6;
   const z = Z(d.s), y = d.y;
   if (d.kind === 'conveyor') {
     B.prop.box(0, y, z, CORR + 2, 0.9, 1.6, mulc(K.rust, 1.1), { bevel: 0.05 });
@@ -178,6 +158,7 @@ function pipebridge(B, d) {
   for (const s of [-1, 1]) B.metal.box(s * 17.6, y / 2, z, 0.5, y / 2, 0.6, K.metal);
 }
 function lines(B, d) {
+  const CORR = d.w || 16.6;
   const z = Z(d.s), rng = makeRng(d.seed);
   for (const s of [-1, 1]) for (const y of d.ys) B.metal.box(s * 16.75, y, z, 0.15, 0.12, 0.12, K.dark);
   for (const y of d.ys) {
@@ -227,14 +208,12 @@ function neonsign(B, d) {
   for (let k = 0; k < 4; k++) B.glow.box(x - d.side * 0.12, d.y + 0.5 + k * (h / 4), z, 0.02, 0.06, 0.42, neon(d.hue + 160, 4));
 }
 function marketgate(B, d, ctx) {
-  const z = Z(d.s);
-  for (const s of [-1, 1]) { B.prop.box(s * 17.2, 7.5, z, 0.6, 7.5, 0.6, mulc(K.red, 0.7), { bevel: 0.08 }); B.glow.box(s * 16.58, 7.5, z, 0.02, 6.8, 0.2, neon(330, 3)); }
-  B.prop.box(0, 13.6, z, 16.8, 1.6, 0.6, mulc(K.red, 0.6), { bevel: 0.1 });
-  B.prop.box(0, 15.4, z, 18.5, 0.25, 0.6, mulc(K.dark, 1.2), { bevel: 0.1 });
-  for (let x = -15; x <= 15; x += 2.5) B.glow.cyl(x, 11.3, z + 0.2, 0.28, 0.6, 8, neon(10, 3.2), { r2: 0.28 });
-  ctx.signs.push({ x: 0, y: 13.6, z: z + 0.62, w: 18, h: 2.4, ry: 0, text: d.text || '야시장', color: '#ff4ad8', fixed: true });
+  const z = Z(d.s), W = (d.w || 16.6) + 0.6;
+  for (const s of [-1, 1]) { B.prop.box(s * W, 7.5, z, 0.6, 7.5, 0.6, mulc(K.red, 0.7), { bevel: 0.08 }); B.glow.box(s * (W - 0.62), 7.5, z, 0.02, 6.8, 0.2, neon(330, 3)); }
+  B.prop.box(0, 13.6, z, W, 1.6, 0.6, mulc(K.red, 0.6), { bevel: 0.1 });
+  for (let x = -W + 1.5; x <= W - 1.5; x += 2.5) B.glow.cyl(x, 11.3, z + 0.2, 0.28, 0.6, 8, neon(10, 3.2), { r2: 0.28 });
+  ctx.signs.push({ x: 0, y: 13.6, z: z + 0.62, w: Math.min(18, 2 * W - 2), h: 2.4, ry: 0, text: d.text || '야시장', color: '#ff4ad8', fixed: true });
 }
-
 // ───────── 공업 지구 / 부두 ─────────
 function plantwall(B, d) {
   const [a, b] = clipOf(d), zc = Z((a + b) / 2), hz = (b - a) / 2, h = d.h;
@@ -248,19 +227,18 @@ function plantwall(B, d) {
   }
 }
 function tank(B, d) {
-  const z = Z(d.s), col = paint(d.hue, 0.9, 0.25);
-  B.metal.cyl(d.x, 0, z, d.r, d.h, 20, col);
-  B.metal.cyl(d.x, d.h, z, d.r, d.r * 0.25, 20, mulc(col, 0.9), { r2: d.r * 0.3 });
-  for (const yy of [d.h * 0.3, d.h * 0.7]) B.metal.cyl(d.x, yy, z, d.r + 0.05, 0.6, 20, mulc(K.red, 0.7), { top: false });
-  for (let yy = 1; yy < d.h; yy += 1.6) { const a = yy * 0.25; B.metal.box(d.x + Math.cos(a) * (d.r + 0.4), yy, z + Math.sin(a) * (d.r + 0.4), 0.5, 0.05, 0.5, K.yellow); }
-  B.glow.box(d.x, d.h + d.r * 0.25 + 0.3, z, 0.2, 0.2, 0.2, K.red3);
+  const z = Z(d.s), col = paint(d.hue, 0.9, 0.25), b = d.base || 0, H = d.h;
+  B.metal.cyl(d.x, b, z, d.r, H, 20, col);
+  B.metal.cyl(d.x, b + H, z, d.r, d.r * 0.25, 20, mulc(col, 0.9), { r2: d.r * 0.3 });
+  for (const yy of [H * 0.3, H * 0.7]) B.metal.cyl(d.x, b + yy, z, d.r + 0.05, 0.6, 20, mulc(K.red, 0.7), { top: false });
+  B.glow.box(d.x, b + H + d.r * 0.25 + 0.3, z, 0.2, 0.2, 0.2, K.red3);
 }
 function stack(B, d, ctx) {
-  const z = Z(d.s);
-  B.prop.cyl(d.x, 0, z, d.r * 1.25, d.h, 12, mulc(K.conc, 0.9), { r2: d.r * 0.9 });
-  for (let yy = d.h * 0.6; yy < d.h; yy += d.h * 0.12) B.prop.cyl(d.x, yy, z, d.r * 1.02, d.h * 0.05, 12, mulc(K.red, 0.9), { r2: d.r * 1.0, top: false });
-  B.glow.box(d.x, d.h + 0.4, z, d.r * 0.7, 0.2, d.r * 0.7, K.orange3);
-  ctx.fires.push([d.x, d.h + 1.2, z]); ctx.beacons.push([d.x, d.h + 1.0, z]);
+  const z = Z(d.s), b = d.base || 0;
+  B.prop.cyl(d.x, b, z, d.r * 1.25, d.h, 12, mulc(K.conc, 0.9), { r2: d.r * 0.9 });
+  for (let yy = d.h * 0.6; yy < d.h; yy += d.h * 0.12) B.prop.cyl(d.x, b + yy, z, d.r * 1.02, d.h * 0.05, 12, mulc(K.red, 0.9), { r2: d.r * 1.0, top: false });
+  B.glow.box(d.x, b + d.h + 0.4, z, d.r * 0.7, 0.2, d.r * 0.7, K.orange3);
+  ctx.fires.push([d.x, b + d.h + 1.2, z]); ctx.beacons.push([d.x, b + d.h + 1.0, z]);
 }
 function containers(B, d) {
   const rng = makeRng(d.seed), z = Z(d.s);
@@ -289,12 +267,12 @@ function plantgate(B, d, ctx) {
 
 // ───────── 현수교 / 터널 / 협곡 / 해안 ─────────
 function btower(B, d, ctx) {
-  const z = Z(d.s), H = d.H;
-  for (const s of [-1, 1]) { B.prop.box(s * 15.6, (H - 12) / 2, z, 1.3, (H + 12) / 2, 1.6, mulc(K.conc, 1.0), { bevel: 0.15 }); B.glow.box(s * 15.6, H + 0.4, z, 0.3, 0.3, 0.3, K.red3); ctx.beacons.push([s * 15.6, H + 0.4, z]); }
-  B.prop.box(0, 32.5, z, 16.9, 1.5, 1.6, mulc(K.conc, 0.95), { bevel: 0.1 });
-  B.prop.box(0, 54, z, 16.9, 2.0, 1.6, mulc(K.conc, 0.95), { bevel: 0.1 });
-  for (const yy of [32.5, 54]) B.glow.box(0, yy - 1.6, z + 1.62, 14, 0.05, 0.02, [0.5, 3.4, 4.2]);
-  for (const s of [-1, 1]) for (let yy = 4; yy < H; yy += 8) B.glow.box(s * 14.28, yy, z, 0.02, 0.4, 0.4, [4, 3.6, 2.8]);
+  const z = Z(d.s), H = d.H, X = d.x || 15.6;
+  for (const s of [-1, 1]) { B.prop.box(s * X, (H - 12) / 2, z, 1.3, (H + 12) / 2, 1.6, mulc(K.conc, 1.0), { bevel: 0.15 }); B.glow.box(s * X, H + 0.4, z, 0.3, 0.3, 0.3, K.red3); ctx.beacons.push([s * X, H + 0.4, z]); }
+  B.prop.box(0, 32.5, z, X + 1.3, 1.5, 1.6, mulc(K.conc, 0.95), { bevel: 0.1 });
+  B.prop.box(0, 54, z, X + 1.3, 2.0, 1.6, mulc(K.conc, 0.95), { bevel: 0.1 });
+  for (const yy of [32.5, 54]) B.glow.box(0, yy - 1.6, z + 1.62, X, 0.05, 0.02, [0.5, 3.4, 4.2]);
+  for (const s of [-1, 1]) { B.metal.beam([s * X, H - 2, z], [s * X, 1, z - 60], 0.3, 0.3, mulc(K.steel, 0.9)); B.metal.beam([s * X, H - 2, z], [s * X, 1, z + 60], 0.3, 0.3, mulc(K.steel, 0.9)); }
 }
 function bcable(B, d) {
   const [a, b] = clipOf(d), span = d.s1 - d.s0;
@@ -320,26 +298,41 @@ function hill(B, d) {
   }
 }
 function tportal(B, d, ctx) {
-  const z = Z(d.s), y = d.y, entry = d.dir > 0, W = entry ? 30 : 17, top = entry ? 60 : 60;
-  B.prop.box(0, (y + top) / 2, z + (entry ? 0.2 : -0.2), W, (top - y) / 2, 0.6, entry ? mulc(K.rock, 0.95) : mulc(K.conc, 0.7), { bevel: 0.2 });
-  if (entry) for (const s of [-1, 1]) B.prop.box(s * (13.8 + (W - 13.8) / 2), y / 2, z + 0.2, (W - 13.8) / 2, y / 2, 0.6, mulc(K.conc, 0.85));
-  // 포털 테 (콘크리트 아치 + 줄무늬 + 표지)
-  B.prop.box(0, y + 1.2, z + (entry ? 0.85 : -0.85), 15.2, 1.2, 0.3, mulc(K.conc, 1.05), { bevel: 0.08 });
-  for (const s of [-1, 1]) B.prop.box(s * 14.6, y / 2, z + (entry ? 0.85 : -0.85), 0.8, y / 2, 0.3, mulc(K.conc, 1.05));
-  B.stripe.box(0, y + 0.25, z + (entry ? 1.16 : -1.16), 13.8, 0.25, 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
-  for (let x = -12; x <= 12; x += 4) B.glow.box(x, y + 0.75, z + (entry ? 1.18 : -1.18), 0.3, 0.12, 0.02, K.orange3);
-  ctx.signs.push({ x: 0, y: y + 1.6, z: z + (entry ? 1.17 : -1.17), w: 9, h: 1.0, ry: entry ? 0 : Math.PI, text: entry ? '지하 터널 · 길이 900m · 전조등 켜기' : 'EXIT', color: '#ffd24a', fixed: true });
+  const z = Z(d.s), y = d.y, entry = d.dir > 0, W = (d.w || 13.8) + 1, F = W + 14, off = entry ? 0.2 : -0.2;
+  B.prop.box(0, (y + 40) / 2, z + off, F, (40 - y) / 2, 0.6, entry ? mulc(K.rock, 0.95) : mulc(K.conc, 0.7), { bevel: 0.2 });
+  for (const s of [-1, 1]) B.prop.box(s * (W + 7), y / 2, z + off, 7, y / 2, 0.6, mulc(K.conc, 0.85));
+  B.prop.box(0, y + 1.2, z + off * 4.2, W, 1.2, 0.3, mulc(K.conc, 1.05), { bevel: 0.08 });
+  B.stripe.box(0, y + 0.25, z + off * 5.8, W - 1, 0.25, 0.02, [1, 1, 1], { uv: [2.6, 2.6] });
+  for (let x = -W + 2; x <= W - 2; x += 4) B.glow.box(x, y + 0.75, z + off * 5.9, 0.3, 0.12, 0.02, K.orange3);
+  ctx.signs.push({ x: 0, y: y + 1.6, z: z + off * 5.85, w: Math.min(9, 2 * W - 2), h: 1.0, ry: entry ? 0 : Math.PI, text: entry ? '지하 터널 · 전조등 켜기' : 'EXIT', color: '#ffd24a', fixed: true });
 }
 function canyongate(B, d, ctx) {
-  const z = Z(d.s);
-  B.metal.box(0, 47, z, CORR + 1.2, 2, 0.8, mulc(K.white, 0.8));
-  ctx.signs.push({ x: 0, y: 47, z: z + 0.82, w: 22, h: 2.8, ry: 0, text: 'SUNRISE COAST · 해안 리조트', color: '#ffcf7a', fixed: true });
+  const z = Z(d.s), W = (d.w || 16.6) + 1.2;
+  B.metal.box(0, 47, z, W, 2, 0.8, mulc(K.white, 0.8));
+  ctx.signs.push({ x: 0, y: 47, z: z + 0.82, w: Math.min(22, 2 * W - 2), h: 2.8, ry: 0, text: 'SUNRISE COAST · 해안 리조트', color: '#ffcf7a', fixed: true });
 }
 
-// 정적 '레일 위 탑승물' 대신 그려 둔 놀이공원 장식은 parkProps.js
+function rock(B, d) {
+  const rng = makeRng(d.seed), z = Z(d.s), b = d.base || 0;
+  B.prop.box(d.x, b + d.h / 2, z, d.hw, d.h / 2, d.hw, mulc(K.rock, 0.75 + rng() * 0.3), { bevel: Math.min(1.5, d.hw * 0.3) });
+  B.grass.box(d.x, b + d.h - 0.1, z, d.hw - 0.5, 0.14, d.hw - 0.5, mulc(K.grass, 0.8 + rng() * 0.3));
+}
+function planter(B, d) { const z = Z(d.s), b = d.base || 0; B.prop.box(d.x, b / 2, z, 1.4, -b / 2, 1.4, mulc(K.white, 0.85), { bevel: 0.1 }); B.grass.box(d.x, 0.02, z, 1.3, 0.04, 1.3, K.grass); }
+function platform(B, d) {
+  const z = Z(d.s), y = d.dy || 0, col = d.style === 'rail' ? hex(0x4a3a30) : d.style === 'road' ? hex(0x2a2c32) : hex(0x8a8d92);
+  B.prop.box(d.x, y - 0.4, z, d.hw, 0.4, d.len / 2, col);
+  if (d.style === 'rail') for (const dz of [-0.6, 0.6]) B.metal.box(d.x, y + 0.08, z + dz, d.hw, 0.08, 0.07, mulc(K.steel, 1.1));
+  if (d.style === 'road') for (let x = -d.hw + 2; x < d.hw; x += 4) B.prop.box(d.x + x, y + 0.01, z, 1, 0.01, 0.1, mulc(K.white, 0.8));
+}
+function scaffold(B, d) {
+  const [a, b] = clipOf(d);
+  for (let s = a + 2; s < b; s += 6) for (const x of [-3.6, 3.6]) B.metal.beam([x, -24, Z(s)], [x, 3, Z(s)], 0.1, 0.1, mulc(K.steel, 0.9));
+}
+// 놀이공원 장식은 parkProps.js
 export const SCENE_EMIT = {
+  rock, planter, platform, scaffold,
   pole, bench, fountain, parkgate, skel, hoard, sitegate, crane, pit, slabfloor, overpass, banner, skybridge, powerline, pipebridge, lines,
   lowcity, pier, neonsign, marketgate, plantwall, tank, stack, containers, gantry, plantgate, btower, bcable, skyline, hill, tportal, canyongate,
 };
 // 청크 경계를 넘는 긴 장식(청크마다 잘라서 그림)
-export const LONG_TYPES = new Set(['ceil', 'rail', 'hoard', 'plantwall', 'bcable', 'lowcity', 'skyline']);
+export const LONG_TYPES = new Set(['ceil', 'rail', 'hoard', 'plantwall', 'bcable', 'lowcity', 'skyline', 'scaffold', 'coasterrail']);

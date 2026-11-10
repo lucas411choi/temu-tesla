@@ -300,21 +300,24 @@ export const DYN_TYPES = Object.keys(EVAL);
 
 export function evalEntity(e, T, out, st) { EVAL[e.type](e, T, out, st); }
 
-// 움직임 전체 범위(z)를 표본으로 계산 → 서버 브로드페이즈 / 클라이언트 컬링용
-export function entityZRange(e) {
+// 움직임 전체 범위(x, z)를 표본으로 계산 → 서버 브로드페이즈 / 클라이언트 컬링용 (로컬 좌표)
+export function entityBounds(e) {
   const period = Math.min(240, Math.max(e.P || 0, e.per || 0, e.type === 'laser' && e.blink ? e.blink.P : 0, 24));
-  let lo = Infinity, hi = -Infinity;
+  let lo = Infinity, hi = -Infinity, xl = Infinity, xh = -Infinity;
   const out = [], st = {};
   for (let T = 0; T <= period; T += 0.1) {
     out.length = 0;
     evalEntity(e, T, out, st);
     for (const p of out) {
-      const r = p.k === 's' ? p.r : Math.abs(p.R[6]) * p.h[0] + Math.abs(p.R[7]) * p.h[1] + Math.abs(p.R[8]) * p.h[2];
-      lo = Math.min(lo, p.c[2] - r); hi = Math.max(hi, p.c[2] + r);
+      const rz = p.k === 's' ? p.r : Math.abs(p.R[6]) * p.h[0] + Math.abs(p.R[7]) * p.h[1] + Math.abs(p.R[8]) * p.h[2];
+      const rx = p.k === 's' ? p.r : Math.abs(p.R[0]) * p.h[0] + Math.abs(p.R[1]) * p.h[1] + Math.abs(p.R[2]) * p.h[2];
+      lo = Math.min(lo, p.c[2] - rz); hi = Math.max(hi, p.c[2] + rz); xl = Math.min(xl, p.c[0] - rx); xh = Math.max(xh, p.c[0] + rx);
     }
-    if (st.cols) for (const c of st.cols) { lo = Math.min(lo, c.z - 2); hi = Math.max(hi, c.z + 2); }
-    if (st.items) for (const c of st.items) { lo = Math.min(lo, c.z - 2); hi = Math.max(hi, c.z + 2); }
+    if (st.cols) for (const c of st.cols) { lo = Math.min(lo, c.z - 2); hi = Math.max(hi, c.z + 2); xl = Math.min(xl, c.x - 2); xh = Math.max(xh, c.x + 2); }
+    if (st.items) for (const c of st.items) { lo = Math.min(lo, c.z - 2); hi = Math.max(hi, c.z + 2); xl = Math.min(xl, c.x - 2); xh = Math.max(xh, c.x + 2); }
   }
   if (!isFinite(lo)) { lo = (e.z !== undefined ? e.z : e.z0 || 0) - 5; hi = lo + 10; }
-  return [lo - 0.5, hi + 0.5];
+  if (!isFinite(xl)) { xl = -20; xh = 20; }
+  return { z: [lo - 0.5, hi + 0.5], x: [xl - 0.5, xh + 0.5] };
 }
+export function entityZRange(e) { return entityBounds(e).z; }

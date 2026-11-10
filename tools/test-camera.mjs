@@ -2,12 +2,12 @@
 // 차가 항상 화면 안에 들어오는지, 구도가 기준(그란 투리스모식 후방 추격)과 맞는지 수치로 확인한다.
 // 실행: node tools/test-camera.mjs
 import { CarSim } from '../shared/sim.js';
-import { createWorld } from '../shared/world.js';
-import { getMap } from '../shared/mapData.js';
+import { createStraightWorld } from '../shared/world.js';
 import { qToMat3 } from '../shared/math.js';
 import { CHASE, chaseFov, newChaseState, stepChase } from '../client/render/chaseCam.js';
 
-const map = getMap('city'), world = createWorld(map);
+// 카메라 구도만 보는 시험이라 끝없이 넓은 평지 위에서 달린다
+const world = createStraightWorld({ statics: [], dynamics: [], ground: [{ s0: -1e6, s1: 1e6, y: 0, solid: true, half: 1e6, wall: Infinity }] });
 let bad = 0;
 const fail = (m) => { bad++; console.log('  ✗ ' + m); };
 const ok = (m) => console.log('  ✓ ' + m);
@@ -73,7 +73,7 @@ function run(name, plan, seconds, startS = 14) {
   return { agg, maxAlt, minDist, maxDist };
 }
 
-const W4 = 0x0f, EX4 = 0xf0, ALL = 0xff;
+const W4 = 0x03, EX4 = 0xf0, ALL = 0xf3;          // q+w = 양쪽 바퀴 전진 (a/s 는 후진)
 // 1) 직선 주행: 구도 기준 확인
 const s1 = run('직선 주행 8초', () => W4, 8);
 {
@@ -88,8 +88,9 @@ const s1 = run('직선 주행 8초', () => W4, 8);
   (c0 >= 47 && c1 <= 53) ? ok(`차가 가로 중앙 ${c0.toFixed(1)}~${c1.toFixed(1)}%`) : fail(`가로 중심 ${c0.toFixed(1)}~${c1.toFixed(1)}%`);
 }
 // 2) 조향
-run('가속 3초 → 왼쪽 바퀴만 1초 → 오른쪽 바퀴만 2초 → 직진', (t) => (t < 3 ? W4 : t < 4 ? 0x05 : t < 6 ? 0x0a : W4), 8);
-run('가속 3초 → 오른쪽 바퀴만 1초 → 왼쪽 바퀴만 2초 → 직진', (t) => (t < 3 ? W4 : t < 4 ? 0x0a : t < 6 ? 0x05 : W4), 8);
+run('가속 3초 → 왼쪽 바퀴만 1초 → 오른쪽 바퀴만 2초 → 직진', (t) => (t < 3 ? W4 : t < 4 ? 0x01 : t < 6 ? 0x02 : W4), 8);
+run('가속 3초 → 오른쪽 바퀴만 1초 → 왼쪽 바퀴만 2초 → 직진', (t) => (t < 3 ? W4 : t < 4 ? 0x02 : t < 6 ? 0x01 : W4), 8);
+run('가속 3초 → 브레이크 → 후진', (t) => (t < 3 ? W4 : t < 4.5 ? 0x100 : 0x0c), 8);
 // 3) 이륙
 const s3 = run('3초 가속 → 4배출구 3초 이륙 → 낙하', (t) => (t < 3 ? W4 : t < 6 ? ALL : 0), 14);
 // 4) 회전(대각선 배출구)

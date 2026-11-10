@@ -69,8 +69,10 @@ export const CFG = {
   // ───────── 바퀴 (서스펜션 + 구동 + 타이어) ─────────
   WHEEL: {
     k: 52000, c: 4200, maxDepth: 0.16, maxN: 45000,   // 스프링 (한 바퀴)
-    drive: 3100,          // 바퀴 1개 최대 구동력 N
-    vmax: 9.7,            // 구동력이 0이 되는 속도 m/s (실제 최고속도는 약 9.2 m/s ≈ 33km/h: 4명이 바퀴 하나씩 맡아도 다룰 수 있는 묵직한 속도)
+    drive: 3600,          // 바퀴 1개 최대 구동력 N
+    vmax: 14.6,           // 전진 구동력이 0이 되는 속도 m/s (실제 최고속도 약 13.9 m/s ≈ 50km/h)
+    vrev: 6.5,            // 후진 최고속도 m/s (약 23km/h)
+    brake: 6200,          // 스페이스 브레이크: 바퀴 1개 제동력 N (차 전체 약 1.6G)
     spool: 0.10,          // 바퀴 구동력 상승 시정수
     roll: 0.015,          // 구름저항 계수
     coast: 2.2,           // 아무 바퀴도 안 누를 때 감속(m/s²) - 묵직하게 서도록
@@ -84,14 +86,15 @@ export const CFG = {
 
   // ───────── 게임 규칙 ─────────
   RULES: {
-    respawnDelay: 2.5, invuln: 2.0, killY: -9, countdown: 3,
+    respawnDelay: 2.5, invuln: 2.0, killY: -9, countdown: 3,      // killY: 맵에 floorY 가 있으면 floorY+0.6 이 대신 쓰인다
     reconnectGrace: 30, suicideHold: 0.7, slowmo: 0.4,
     corridorHalf: 16.5,        // 도로+인도 폭(이 바깥은 건물 벽)
     roadHalf: 12,
   },
 };
 
-// 키 비트 (q w a s e r d f)
-export const KEY_BITS = { q: 1, w: 2, a: 4, s: 8, e: 16, r: 32, d: 64, f: 128 };
+// 키 비트: q=왼쪽 전진 w=오른쪽 전진 a=왼쪽 후진 s=오른쪽 후진 / e r d f = 배출구 / space = 브레이크(누구나)
+export const KEY_BITS = { q: 1, w: 2, a: 4, s: 8, e: 16, r: 32, d: 64, f: 128, space: 256 };
+export const BRAKE_BIT = 256;
 export const WHEEL_MASK = 0x0f;
 export const EXHAUST_MASK = 0xf0;

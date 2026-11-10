@@ -228,6 +228,11 @@ export class RoomManager {
       if (MAP_LIST.includes(id)) { ctx.room.mapId = id; ctx.room.sendLobby(); }
     });
 
+    socket.on('room:toLobby', () => {
+      if (!need() || (ctx.room.phase !== 'playing' && ctx.room.phase !== 'paused' && ctx.room.phase !== 'finished')) return;
+      ctx.room.backToLobby(`${ctx.player.name}님이 대기실로 돌아가기를 눌렀습니다`);
+    });
+
     socket.on('room:again', () => {
       if (!need() || ctx.room.phase !== 'finished') return;
       ctx.room.game = null; ctx.room.phase = 'lobby'; ctx.room.msg = '';
